@@ -1,0 +1,27 @@
+import Joi from "joi";
+
+import { ValidationError } from "./errors.js";
+
+export interface Payload {
+  type: string;
+  name: string;
+}
+export const payloadSchema = Joi.object({
+  type: Joi.string().valid("download", "upload").required(),
+  name: Joi.string().alphanum().case("lower").required(),
+});
+
+export const validate = (schema: Joi.Schema, value: any): any => {
+  const { error, value: validated } = schema.validate(value);
+  if (error !== undefined) {
+    let message = error.message;
+    const details: string | undefined = error.details
+      .map((d) => d.message)
+      .join(", ");
+    if (details !== undefined) {
+      message = `${message}: ${details}`;
+    }
+    throw new ValidationError(message);
+  }
+  return validated;
+};
