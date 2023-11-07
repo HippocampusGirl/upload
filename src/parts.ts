@@ -66,3 +66,22 @@ export async function* generateUploadOptions(
     yield { path, ranges };
   }
 }
+
+export const makeSuffixes = (ranges: Range[]): string[] => {
+  const size = ranges[ranges.length - 1].end;
+  const digits = size.toString(10).length;
+
+  let suffixes: Array<string> = ranges.map((range) => {
+    const [start, end] = [range.start, range.end].map((n) =>
+      n.toString(10).padStart(digits, "0")
+    );
+    if (range.end === size) {
+      // Last part
+      return `.${start}-`;
+    } else {
+      return `.${start}-${end}`;
+    }
+  });
+
+  return suffixes;
+};

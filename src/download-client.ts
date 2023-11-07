@@ -8,7 +8,7 @@ import { makeClient } from "./socket-client.js";
 
 const debug = Debug("download-client");
 
-export const makeUploadCommand = () => {
+export const makeDownloadCommand = () => {
   const command = new Command();
   command
     .name(`download`)
@@ -54,5 +54,13 @@ class DownloadClient {
     this.socket = socket;
   }
 
-  async listen() {}
+  async listen() {
+    this.socket.on("download:create", async (url: string) => {
+      const { hostname, pathname } = new URL(url);
+      const bucket = hostname.split(".")[0];
+      if (!bucket.startsWith("upload-")) {
+        throw new Error(`Invalid bucket name: ${bucket}`);
+      }
+    });
+  }
 }
