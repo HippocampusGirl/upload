@@ -96,9 +96,21 @@ class DownloadClient {
   socket: Socket;
   queue: queueAsPromised<DownloadJob, CompletedDownloadJob>;
 
+  // TODO garbage collect this
+  downloadInfos: Map<string, DownloadInfo> = new Map();
+
   constructor(socket: Socket, numThreads: number) {
     this.socket = socket;
     this.queue = fastq.promise(this, this.runDownloadJob, numThreads);
+  }
+
+  getDownloadInfo(path: string): DownloadInfo {
+    let downloadInfo = this.downloadInfos.get(path);
+    if (downloadInfo === undefined) {
+      downloadInfo = new DownloadInfo(path);
+      this.downloadInfos.set(path, downloadInfo);
+    }
+    return downloadInfo;
   }
 
   listen() {
@@ -113,7 +125,7 @@ class DownloadClient {
       try {
         const { checksumSha256 } = checksumJob;
         const path = makePath(checksumJob);
-        const downloadInfo = new DownloadInfo(path);
+        const downloadInfo = this.getDownloadInfo(path);
         await downloadInfo.setChecksumSha256(checksumSha256);
       } catch (error) {
         debug(`Failed to process checksum job: ${error}`);
@@ -175,11 +187,9 @@ class DownloadClient {
 
   async finalizeDownloadJob(downloadJob: CompletedDownloadJob): Promise<void> {
     const path = makePath(downloadJob);
-    const downloadInfo = new DownloadInfo(path);
+    const downloadInfo = this.getDownloadInfo(path);
     let { start, end } = downloadJob;
-    if (end !== undefined) {
-      await downloadInfo.addRange(new Range(start, end));
-    } else {
+    if (end === undefined) {
       const fileSize = start + downloadJob.size;
       const stats = await stat(path);
       if (stats.size !== fileSize) {
@@ -189,16 +199,15 @@ class DownloadClient {
       }
       await downloadInfo.setSize(fileSize);
       end = start + downloadJob.size - 1;
-      await downloadInfo.addRange(new Range(start, end));
     }
-    debug(`completed download job ${JSON.stringify(downloadJob)}`);
-    await this.socket.emitWithAck("download:complete", downloadJob);
-    if (await downloadInfo.isComplete()) {
-      await downloadInfo.verifyChecksumSha256();
-      await downloadInfo.delete();
-      debug(`successfully downloaded "${path}"`);
-      await this.socket.emitWithAck("checksum:complete", downloadJob);
-    }
+    const range = new Range(start, end);
+    const isVerified = await downloadInfo.addRange(range);
+    debug(
+      "completed partial download for %s in range %s",
+      downloadJob.path,
+      range.toString()
+    );
+    await this.socket.emitWithAck("download:complete", downloadJob, isVerified);
   }
 
   async runDownloadJob(

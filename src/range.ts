@@ -12,6 +12,10 @@ export class Range {
   touches(that: Range): boolean {
     return this.end + 1 >= that.start && this.start - 1 <= that.end;
   }
+
+  toString(): string {
+    return `${this.start}-${this.end}`;
+  }
 }
 
 const byStart = (a: Range, b: Range): number => a.start - b.start;

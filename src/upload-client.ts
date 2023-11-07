@@ -182,7 +182,11 @@ class UploadClient {
 
   async finalizeUploadJob(uploadJob: CompletedUploadJob): Promise<void> {
     updateProgress(uploadJob);
-    debug(`completed upload job ${JSON.stringify(uploadJob)}`);
+    debug(
+      "completed partial upload for %s in range %s",
+      uploadJob.path,
+      uploadJob.range.toString()
+    );
     await this.socket.emitWithAck("upload:complete", uploadJob);
   }
 

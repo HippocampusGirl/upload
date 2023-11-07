@@ -1,3 +1,4 @@
+import Debug from "debug";
 import Joi from "joi";
 import { Server, Socket } from "socket.io";
 
@@ -12,6 +13,8 @@ import {
   makeDownloadOptions
 } from "./download-parts.js";
 import { validate } from "./schema.js";
+
+const debug = Debug("serve");
 
 export const submitDownloadJob = async (
   io: Server,
@@ -36,6 +39,7 @@ export const submitDownloadJob = async (
         start,
         end,
       };
+      debug("sending download job", downloadJob);
       io.to("download").emit("download:create", downloadJob);
       break;
     }
@@ -51,6 +55,7 @@ export const submitDownloadJob = async (
         path,
         checksumSha256,
       };
+      debug("sending checksum job", checksumJob);
       io.to("download").emit("download:checksum", checksumJob);
       break;
     }
@@ -58,15 +63,18 @@ export const submitDownloadJob = async (
 };
 
 export const registerDownloadHandlers = (io: Server, socket: Socket) => {
-  socket.on("download:complete", async (downloadJob: DownloadJob, callback) => {
-    const { url } = downloadJob;
-    const downloadOptions = makeDownloadOptions(url);
-    if (downloadOptions.type !== "file") {
-      throw new Error(`Invalid download job: ${downloadJob}`);
+  socket.on(
+    "download:complete",
+    async (downloadJob: DownloadJob, isVerified: boolean, callback) => {
+      const { url } = downloadJob;
+      const downloadOptions = makeDownloadOptions(url);
+      if (downloadOptions.type !== "file") {
+        throw new Error(`Invalid download job: ${downloadJob}`);
+      }
+      await io.s3.send(new DeleteObjectCommand(downloadOptions.input));
+      callback();
     }
-    await io.s3.send(new DeleteObjectCommand(downloadOptions.input));
-    callback();
-  });
+  );
   socket.on("checksum:complete", async (downloadJob: DownloadJob, callback) => {
     const { url } = downloadJob;
     const downloadOptions = makeChecksumJob(url);

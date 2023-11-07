@@ -1,4 +1,7 @@
+import Debug from "debug";
 import { io, Socket } from "socket.io-client";
+
+const debug = Debug("socket-client");
 
 export const makeClient = (endpoint: string, token: string): Socket => {
   const socket = io(endpoint, {
@@ -6,7 +9,7 @@ export const makeClient = (endpoint: string, token: string): Socket => {
   });
 
   socket.on("connect_error", (error) => {
-    throw new Error(`Failed to connect to server: ${error.message}`);
+    debug(`Failed to connect to server: ${error.message}`);
   });
 
   return socket;
