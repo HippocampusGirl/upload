@@ -40,6 +40,7 @@ const context = await esbuild.context({
 const rebuildCommand = new Command();
 rebuildCommand.name(`rebuild`).action(async () => {
   await context.rebuild();
+  context.dispose();
 });
 
 const watchCommand = new Command();
