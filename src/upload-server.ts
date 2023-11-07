@@ -3,8 +3,8 @@ import { Server, Socket } from "socket.io";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-import { signedUrlOptions } from "./config.js";
-import { makeSuffixes, UploadJob, UploadOptions } from "./parts.js";
+import { delimiter, signedUrlOptions } from "./config.js";
+import { makeSuffixes, UploadJob, UploadOptions } from "./upload-parts.js";
 
 export const registerUploadHandlers = (io: Server, socket: Socket) => {
   socket.on("upload:create", async (uploadOptions: UploadOptions, callback) => {
@@ -38,10 +38,6 @@ export const registerUploadHandlers = (io: Server, socket: Socket) => {
     callback(uploadJobs);
   });
 
-  socket.on("upload:complete", async (uploadJob: UploadJob, callback) => {
-    callback();
-  });
-
   socket.on(
     "upload:checksum",
     async (path: string, checksum: string, callback) => {
@@ -51,7 +47,7 @@ export const registerUploadHandlers = (io: Server, socket: Socket) => {
         await io.s3.send(
           new PutObjectCommand({
             ...bucketInput,
-            Key: `${path}.sha256`,
+            Key: `${path}${delimiter}sha256`,
             Body: checksum,
           })
         );

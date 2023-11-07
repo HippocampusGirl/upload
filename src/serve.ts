@@ -5,6 +5,7 @@ import { Server, Socket } from "socket.io";
 
 import { S3Client } from "@aws-sdk/client-s3";
 
+import { registerDownloadHandlers } from "./download-server.js";
 import { UnauthorizedError } from "./errors.js";
 import { Payload } from "./schema.js";
 import { makeS3Client, requireBucketName } from "./storage.js";
@@ -33,8 +34,8 @@ export const makeServeCommand = () => {
     )
     .action(() => {
       const options = command.opts();
-      const port: number = Number(options.port);
-      if (!Number.isInteger(port) || port === null) {
+      const port: number = parseInt(options.port, 10);
+      if (Number.isNaN(port)) {
         throw new Error(`"port" is not an integer`);
       }
       const publicKeyFile = options.publicKeyFile;
@@ -79,11 +80,14 @@ export const serve = (port: number, publicKey: string) => {
     socket.payload = { type, name };
     socket.bucket = await requireBucketName(io.s3, name, loc);
 
+    socket.join(type);
+
     return next();
   });
 
   io.on("connection", (socket: Socket) => {
     registerUploadHandlers(io, socket);
+    registerDownloadHandlers(io, socket);
   });
 
   // Exit on unhandled error

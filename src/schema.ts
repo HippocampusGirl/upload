@@ -19,9 +19,10 @@ export interface Payload {
   loc?: CloudflareBucketLocationConstraint;
 }
 
+export const nameSchema = Joi.string().alphanum().case("lower");
 export const payloadSchema = Joi.object({
   type: Joi.string().valid("download", "upload").required(),
-  name: Joi.string().alphanum().case("lower").required(),
+  name: nameSchema.required(),
   loc: Joi.string().valid(...Object.keys(CloudflareBucketLocationConstraint)),
 });
 

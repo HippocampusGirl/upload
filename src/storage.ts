@@ -17,6 +17,8 @@ import { CloudflareBucketLocationConstraint } from "./schema.js";
 
 const debug = Debug("storage");
 
+export const prefix = "upload-";
+
 export const makeS3Client = (): S3Client => {
   const { endpoint, accessKeyId, secretAccessKey } = getS3Config();
   return new S3Client({
@@ -31,7 +33,7 @@ export const requireBucketName = async (
   name: string,
   loc: CloudflareBucketLocationConstraint | undefined
 ): Promise<string> => {
-  const bucket = `upload-${name}`;
+  const bucket = `${prefix}${name}`;
   const bucketInput = { Bucket: bucket };
 
   try {
@@ -75,7 +77,7 @@ export const listObjectsInBucket = async (
 export const listObjects = async (s3: S3Client): Promise<_Object[]> => {
   const buckets = await s3.send(new ListBucketsCommand({})).then((output) =>
     output.Buckets?.reduce((previousValue, bucket) => {
-      if (bucket.Name?.startsWith("upload-")) {
+      if (bucket.Name?.startsWith(prefix)) {
         previousValue.push(bucket.Name);
       }
       return previousValue;

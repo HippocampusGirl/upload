@@ -1,8 +1,9 @@
 import { format } from "bytes";
 import formatDuration from "format-duration";
 import Gauge from "gauge";
-import { Range, UploadJob } from "parts.js";
 import makeEta from "simple-eta";
+
+import { Range, UploadJob } from "./upload-parts.js";
 
 export const gauge: Gauge = new Gauge();
 let bytes = 0;

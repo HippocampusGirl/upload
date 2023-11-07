@@ -13,18 +13,18 @@ import { Socket } from "socket.io-client";
 
 import { calculateChecksum } from "./fs.js";
 import { client } from "./http-client.js";
+import { makeClient } from "./socket-client.js";
 import {
   generateUploadOptions,
   Range,
   RangeOptions,
   UploadJob
-} from "./parts.js";
-import { makeClient } from "./socket-client.js";
+} from "./upload-parts.js";
 import { gauge, resetProgress, updateProgress } from "./upload-progress.js";
 
-const debug = Debug("upload-client");
-
 interface CompletedUploadJob extends UploadJob {}
+
+const debug = Debug("upload-client");
 
 export const makeUploadCommand = () => {
   const command = new Command();
@@ -89,9 +89,11 @@ export const makeUploadCommand = () => {
       const socket = makeClient(endpoint, token);
       const client = new UploadClient(socket, numThreads);
 
-      await client.submitPaths(paths, { minPartSize, maxPartCount });
-
-      socket.disconnect();
+      try {
+        await client.submitPaths(paths, { minPartSize, maxPartCount });
+      } finally {
+        socket.disconnect();
+      }
     });
   return command;
 };
@@ -150,7 +152,7 @@ class UploadClient {
     const { start, end } = uploadJob.range;
     uploadJob.range = new Range(start, end);
     const { url, range } = uploadJob;
-    let writeStream: Request = client.stream.put(url, {
+    const writeStream: Request = client.stream.put(url, {
       headers: {
         "Content-Type": "application/octet-stream",
         "Content-Length": `${range.size()}`,

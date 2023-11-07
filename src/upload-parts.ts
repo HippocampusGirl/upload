@@ -1,5 +1,7 @@
 import { stat } from "node:fs/promises";
 
+import { delimiter } from "./config.js";
+
 export class Range {
   start: number; // inclusive
   end: number; // inclusive
@@ -77,9 +79,9 @@ export const makeSuffixes = (ranges: Range[]): string[] => {
     );
     if (range.end === size) {
       // Last part
-      return `.${start}-`;
+      return `${delimiter}${start}-`;
     } else {
-      return `.${start}-${end}`;
+      return `${delimiter}${start}-${end}`;
     }
   });
 

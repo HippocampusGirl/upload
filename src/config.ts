@@ -20,3 +20,4 @@ export const getS3Config = () => {
 
 export const signedUrlOptions = { expiresIn: 60 * 60 };
 export const keyRegExp = /^[a-z][a-z0-9-_/\.]+[a-z0-9]$/;
+export const delimiter = "/";
