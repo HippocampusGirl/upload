@@ -11,12 +11,13 @@ import { PassThrough } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { Socket } from "socket.io-client";
 
+import { requestOptions } from "./config.js";
 import { calculateChecksum } from "./fs.js";
 import { client } from "./http-client.js";
+import { Range } from "./range.js";
 import { makeClient } from "./socket-client.js";
 import {
   generateUploadOptions,
-  Range,
   RangeOptions,
   UploadJob
 } from "./upload-parts.js";
@@ -157,9 +158,7 @@ class UploadClient {
         "Content-Type": "application/octet-stream",
         "Content-Length": `${range.size()}`,
       },
-      retry: {
-        limit: 100,
-      },
+      ...requestOptions,
     });
     return new Promise((resolve, reject) => {
       const fn = async (retryStream: Request) => {
@@ -188,8 +187,8 @@ class UploadClient {
   }
 
   async submitChecksum(path: string): Promise<void> {
-    const checksum = await calculateChecksum(path);
-    await this.socket.emitWithAck("upload:checksum", path, checksum);
+    const checksumSha256 = await calculateChecksum(path);
+    await this.socket.emitWithAck("upload:checksum", path, checksumSha256);
   }
 
   async submitPaths(paths: string[], options: RangeOptions): Promise<void> {

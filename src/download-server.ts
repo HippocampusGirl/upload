@@ -1,25 +1,34 @@
+import Joi from "joi";
 import { Server, Socket } from "socket.io";
 
 import { DeleteObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 import { signedUrlOptions } from "./config.js";
-import { DownloadJob, makeDownloadOptions } from "./download-parts.js";
-import { UploadJob } from "./upload-parts.js";
+import {
+  ChecksumJob,
+  DownloadJob,
+  makeChecksumJob,
+  makeDownloadOptions
+} from "./download-parts.js";
+import { validate } from "./schema.js";
 
-const submitDownloadJob = async (io: Server, url: string): Promise<void> => {
+export const submitDownloadJob = async (
+  io: Server,
+  url: string
+): Promise<void> => {
   const downloadOptions = makeDownloadOptions(url);
+  const { input, name, path } = downloadOptions;
 
   switch (downloadOptions.type) {
     case "file": {
-      const { input, name, path, start, end } = downloadOptions;
+      const { start, end } = downloadOptions;
       const downloadUrl = await getSignedUrl(
         io.s3,
         new GetObjectCommand(input),
         signedUrlOptions
       );
 
-      console.log("downloadUrl", downloadUrl);
       const downloadJob: DownloadJob = {
         url: downloadUrl,
         name,
@@ -28,24 +37,39 @@ const submitDownloadJob = async (io: Server, url: string): Promise<void> => {
         end,
       };
       io.to("download").emit("download:create", downloadJob);
+      break;
     }
     case "checksum": {
-      // TODO
+      const response = await io.s3.send(new GetObjectCommand(input));
+      if (response.Body === undefined) {
+        throw new Error(`Invalid response from s3: "Body" is undefined`);
+      }
+      const checksumSha256 = await response.Body.transformToString();
+      validate(Joi.string().base64(), checksumSha256);
+      const checksumJob: ChecksumJob = {
+        name,
+        path,
+        checksumSha256,
+      };
+      io.to("download").emit("download:checksum", checksumJob);
+      break;
     }
   }
 };
 
 export const registerDownloadHandlers = (io: Server, socket: Socket) => {
-  socket.on("upload:complete", async (uploadJob: UploadJob, callback) => {
-    await submitDownloadJob(io, uploadJob.url);
-    callback();
-  });
   socket.on("download:complete", async (downloadJob: DownloadJob, callback) => {
     const { url } = downloadJob;
     const downloadOptions = makeDownloadOptions(url);
     if (downloadOptions.type !== "file") {
       throw new Error(`Invalid download job: ${downloadJob}`);
     }
+    await io.s3.send(new DeleteObjectCommand(downloadOptions.input));
+    callback();
+  });
+  socket.on("checksum:complete", async (downloadJob: DownloadJob, callback) => {
+    const { url } = downloadJob;
+    const downloadOptions = makeChecksumJob(url);
     await io.s3.send(new DeleteObjectCommand(downloadOptions.input));
     callback();
   });

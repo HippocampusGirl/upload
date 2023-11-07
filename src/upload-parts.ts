@@ -1,20 +1,7 @@
 import { stat } from "node:fs/promises";
 
 import { delimiter } from "./config.js";
-
-export class Range {
-  start: number; // inclusive
-  end: number; // inclusive
-
-  constructor(start: number, end: number) {
-    this.start = start;
-    this.end = end;
-  }
-
-  size(): number {
-    return this.end - this.start + 1;
-  }
-}
+import { Range } from "./range.js";
 
 export interface UploadOptions {
   path: string;

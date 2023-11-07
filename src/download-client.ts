@@ -5,18 +5,26 @@ import { Request } from "got";
 import Joi from "joi";
 import jwt from "jsonwebtoken";
 import { createHash } from "node:crypto";
-import { FileHandle, mkdir, open } from "node:fs/promises";
-import { parse } from "node:path";
+import { FileHandle, open, stat } from "node:fs/promises";
 import { pipeline } from "node:stream/promises";
 import { join } from "path";
 import { Socket } from "socket.io-client";
 
-import { DownloadFileBase, DownloadJob } from "./download-parts.js";
+import { requestOptions } from "./config.js";
+import { DownloadInfo } from "./download-info.js";
+import {
+  ChecksumJob,
+  DownloadFileBase,
+  DownloadJob
+} from "./download-parts.js";
+import { touch } from "./fs.js";
 import { client } from "./http-client.js";
+import { Range } from "./range.js";
 import { makeClient } from "./socket-client.js";
-import { Range } from "./upload-parts.js";
 
-interface CompletedDownloadJob extends DownloadJob {}
+interface CompletedDownloadJob extends DownloadJob {
+  size: number;
+}
 
 const debug = Debug("download-client");
 
@@ -78,6 +86,12 @@ export const makeDownloadCommand = () => {
   return command;
 };
 
+const makePath = (
+  job: DownloadJob | ChecksumJob | DownloadFileBase
+): string => {
+  return join(job.name, job.path);
+};
+
 class DownloadClient {
   socket: Socket;
   queue: queueAsPromised<DownloadJob, CompletedDownloadJob>;
@@ -95,16 +109,28 @@ class DownloadClient {
         debug(`Failed to process download job: ${error}`);
       }
     });
+    this.socket.on("download:checksum", async (checksumJob: ChecksumJob) => {
+      try {
+        const { checksumSha256 } = checksumJob;
+        const path = makePath(checksumJob);
+        const downloadInfo = new DownloadInfo(path);
+        await downloadInfo.setChecksumSha256(checksumSha256);
+      } catch (error) {
+        debug(`Failed to process checksum job: ${error}`);
+      }
+    });
   }
 
   async retryDownloadJob(
     readStream: Request,
-    options: DownloadFileBase
-  ): Promise<void> {
-    const { path, start, end } = options;
+    downloadJob: DownloadJob
+  ): Promise<CompletedDownloadJob> {
+    const { start, end } = downloadJob;
+    const path = makePath(downloadJob);
+    await touch(path);
     let fileHandle: FileHandle | undefined;
     const md5 = createHash("md5");
-    let count = 0;
+    let size = 0;
     try {
       fileHandle = await open(path, "r+");
       const writeStream = fileHandle.createWriteStream({ start });
@@ -113,7 +139,7 @@ class DownloadClient {
         async function* (source: AsyncIterable<Buffer>) {
           for await (const chunk of source) {
             md5.update(chunk);
-            count += chunk.length;
+            size += chunk.length;
             yield chunk;
           }
         },
@@ -124,7 +150,7 @@ class DownloadClient {
       await fileHandle?.close();
     }
     if (end !== undefined) {
-      if (count !== new Range(start, end).size()) {
+      if (size !== new Range(start, end).size()) {
         throw new Error(
           `Received invalid response from server: Content length does not match suffix`
         );
@@ -141,32 +167,45 @@ class DownloadClient {
         `Received invalid response from server: "etag" does not match MD5 checksum`
       );
     }
+    return {
+      ...downloadJob,
+      size,
+    };
   }
 
   async finalizeDownloadJob(downloadJob: CompletedDownloadJob): Promise<void> {
+    const path = makePath(downloadJob);
+    const downloadInfo = new DownloadInfo(path);
+    let { start, end } = downloadJob;
+    if (end !== undefined) {
+      await downloadInfo.addRange(new Range(start, end));
+    } else {
+      const fileSize = start + downloadJob.size;
+      const stats = await stat(path);
+      if (stats.size !== fileSize) {
+        throw new Error(
+          `File size does not match: ${stats.size} != ${fileSize}`
+        );
+      }
+      await downloadInfo.setSize(fileSize);
+      end = start + downloadJob.size - 1;
+      await downloadInfo.addRange(new Range(start, end));
+    }
     debug(`completed download job ${JSON.stringify(downloadJob)}`);
     await this.socket.emitWithAck("download:complete", downloadJob);
+    if (await downloadInfo.isComplete()) {
+      await downloadInfo.verifyChecksumSha256();
+      await downloadInfo.delete();
+      debug(`successfully downloaded "${path}"`);
+      await this.socket.emitWithAck("checksum:complete", downloadJob);
+    }
   }
 
   async runDownloadJob(
     downloadJob: DownloadJob
   ): Promise<CompletedDownloadJob> {
-    const { url, name, start, end } = downloadJob;
-    const path = join(name, downloadJob.path);
-
-    // Create directory if it does not exist
-    const { dir } = parse(path);
-    await mkdir(dir, { recursive: true });
-
-    // Create empty file if it does not exist
-    let fileHandle = await open(path, "a");
-    await fileHandle.close();
-
-    const readStream: Request = client.stream.get(url, {
-      retry: {
-        limit: 100,
-      },
-    });
+    const { url } = downloadJob;
+    const readStream: Request = client.stream.get(url, { ...requestOptions });
     return new Promise((resolve, reject) => {
       const fn = async (retryStream: Request) => {
         try {
@@ -176,14 +215,12 @@ class DownloadClient {
               fn(createRetryStream());
             }
           );
-          await this.retryDownloadJob(retryStream, {
-            name,
-            path,
-            start,
-            end,
-          });
-          await this.finalizeDownloadJob(downloadJob);
-          resolve(downloadJob);
+          let completedDownloadJob = await this.retryDownloadJob(
+            retryStream,
+            downloadJob
+          );
+          await this.finalizeDownloadJob(completedDownloadJob);
+          resolve(completedDownloadJob);
         } catch (error) {
           debug(error);
         }

@@ -16,6 +16,8 @@ command
   .hook("preAction", (that, actionCommand) => {
     if (that.opts().debug) {
       Debug.enable("*");
+    } else {
+      Debug.enable("upload-client,download-client,serve");
     }
   });
 

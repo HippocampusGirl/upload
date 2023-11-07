@@ -3,7 +3,8 @@ import formatDuration from "format-duration";
 import Gauge from "gauge";
 import makeEta from "simple-eta";
 
-import { Range, UploadJob } from "./upload-parts.js";
+import { Range } from "./range.js";
+import { UploadJob } from "./upload-parts.js";
 
 export const gauge: Gauge = new Gauge();
 let bytes = 0;

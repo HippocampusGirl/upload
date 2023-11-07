@@ -1,4 +1,5 @@
 import { Command } from "commander";
+import Debug from "debug";
 import jwt from "jsonwebtoken";
 import { readFileSync } from "node:fs";
 import { Server, Socket } from "socket.io";
@@ -23,6 +24,8 @@ interface ExtendedSocket {
 interface ExtendedServer {
   s3: S3Client;
 }
+
+const debug = Debug("serve");
 
 export const makeServeCommand = () => {
   const command = new Command("serve");
