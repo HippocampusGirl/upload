@@ -7,7 +7,7 @@ import { S3Client } from "@aws-sdk/client-s3";
 
 import { UnauthorizedError } from "./errors.js";
 import { Payload } from "./schema.js";
-import { getBucketName, makeS3Client } from "./storage.js";
+import { makeS3Client, requireBucketName } from "./storage.js";
 import { registerUploadHandlers } from "./upload-server.js";
 
 // Allow socket to store payload
@@ -75,9 +75,9 @@ export const serve = (port: number, publicKey: string) => {
       return next(new UnauthorizedError("Invalid token payload"));
     }
 
-    const { type, name } = payload;
+    const { type, name, loc } = payload as Payload;
     socket.payload = { type, name };
-    socket.bucket = await getBucketName(io.s3, name);
+    socket.bucket = await requireBucketName(io.s3, name, loc);
 
     return next();
   });

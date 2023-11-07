@@ -1,9 +1,10 @@
 import Debug from "debug";
-import { Socket } from "socket.io";
 
 import {
   _Object,
+  BucketLocationConstraint,
   CreateBucketCommand,
+  CreateBucketCommandInput,
   HeadBucketCommand,
   ListBucketsCommand,
   ListObjectsCommand,
@@ -12,6 +13,7 @@ import {
 } from "@aws-sdk/client-s3";
 
 import { getS3Config } from "./config.js";
+import { CloudflareBucketLocationConstraint } from "./schema.js";
 
 const debug = Debug("storage");
 
@@ -24,9 +26,10 @@ export const makeS3Client = (): S3Client => {
   });
 };
 
-export const getBucketName = async (
+export const requireBucketName = async (
   s3: S3Client,
-  name: string
+  name: string,
+  loc: CloudflareBucketLocationConstraint | undefined
 ): Promise<string> => {
   const bucket = `upload-${name}`;
   const bucketInput = { Bucket: bucket };
@@ -35,7 +38,13 @@ export const getBucketName = async (
     await s3.send(new HeadBucketCommand(bucketInput));
   } catch (error) {
     try {
-      await s3.send(new CreateBucketCommand(bucketInput));
+      const input: CreateBucketCommandInput = { ...bucketInput };
+      if (loc !== undefined) {
+        input.CreateBucketConfiguration = {
+          LocationConstraint: loc as BucketLocationConstraint,
+        };
+      }
+      await s3.send(new CreateBucketCommand(input));
     } catch (error) {
       debug(error);
       throw new Error("Failed to create bucket");
