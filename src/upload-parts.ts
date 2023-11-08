@@ -1,28 +1,23 @@
+import { calculateChecksum } from "fs.js";
+import { debug } from "node:console";
 import { stat } from "node:fs/promises";
 
 import { delimiter } from "./config.js";
+import { FilePart, Job } from "./part.js";
 import { Range } from "./range.js";
 
-export interface UploadOptions {
-  path: string;
-  ranges: Range[];
-}
-
-export interface UploadJob {
-  path: string;
-  range: Range;
-  url: string;
-}
+export interface UploadRequest extends FilePart {}
+export interface UploadJob extends Job {}
 
 export interface RangeOptions {
   minPartSize: number;
   maxPartCount: number;
 }
 
-export async function* generateUploadOptions(
+export async function* generateUploadRequests(
   paths: string[],
   { minPartSize, maxPartCount }: RangeOptions
-): AsyncGenerator<UploadOptions, void, void> {
+): AsyncGenerator<UploadRequest, void, void> {
   for (let path of paths) {
     const stats = await stat(path);
     const size = stats.size;
@@ -33,7 +28,6 @@ export async function* generateUploadOptions(
     );
     const partSize = Math.ceil(Number(size) / partCount);
 
-    const ranges: Range[] = new Array();
     for (let i = 0; i < partCount; i++) {
       const start = i * partSize;
       let end = start + partSize;
@@ -42,35 +36,19 @@ export async function* generateUploadOptions(
       end = (end > size ? size : end) - 1;
 
       const range = new Range(start, end);
+      const checksumMD5 = await calculateChecksum(path, "md5", range);
 
-      // Last part cannot be smaller than `minPartSize`
-      if (range.size() < minPartSize) {
-        ranges[ranges.length - 1].end = end;
-        continue;
-      }
-
-      ranges.push(range);
+      yield { path, size, range, checksumMD5 };
     }
-
-    yield { path, ranges };
   }
 }
 
-export const makeSuffixes = (ranges: Range[]): string[] => {
-  const size = ranges[ranges.length - 1].end;
+export const makeSuffix = (uploadRequest: UploadRequest): string => {
+  const { size, range } = uploadRequest;
   const digits = size.toString(10).length;
 
-  let suffixes: Array<string> = ranges.map((range) => {
-    const [start, end] = [range.start, range.end].map((n) =>
-      n.toString(10).padStart(digits, "0")
-    );
-    if (range.end === size) {
-      // Last part
-      return `${delimiter}${start}-`;
-    } else {
-      return `${delimiter}${start}-${end}`;
-    }
-  });
-
-  return suffixes;
+  const [start, end] = [range.start, range.end].map((n) =>
+    n.toString(10).padStart(digits, "0")
+  );
+  return `${delimiter}${start}-${end}`;
 };

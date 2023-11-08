@@ -1,3 +1,5 @@
+import Joi from "joi";
+
 export class Range {
   start: number; // inclusive
   end: number; // inclusive
@@ -6,8 +8,13 @@ export class Range {
     this.start = start;
     this.end = end;
   }
+
   size(): number {
     return this.end - this.start + 1;
+  }
+
+  equals(that: Range): boolean {
+    return this.start === that.start && this.end === that.end;
   }
   touches(that: Range): boolean {
     return this.end + 1 >= that.start && this.start - 1 <= that.end;
@@ -35,3 +42,8 @@ export const reduceRanges = (ranges: Range[]): Range[] =>
     }
     return array;
   }, new Array<Range>());
+
+export const rangeSchema = Joi.object().keys({
+  start: Joi.number().required(),
+  end: Joi.number().required(),
+});

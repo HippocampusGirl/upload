@@ -13,7 +13,7 @@ import {
 } from "@aws-sdk/client-s3";
 
 import { getS3Config } from "./config.js";
-import { CloudflareBucketLocationConstraint } from "./schema.js";
+import { CloudflareBucketLocationConstraint } from "./payload.js";
 
 const debug = Debug("storage");
 
@@ -28,12 +28,13 @@ export const makeS3Client = (): S3Client => {
   });
 };
 
+const getBucketName = (name: string): string => `${prefix}${name}`;
 export const requireBucketName = async (
   s3: S3Client,
   name: string,
   loc: CloudflareBucketLocationConstraint | undefined
 ): Promise<string> => {
-  const bucket = `${prefix}${name}`;
+  const bucket = getBucketName(name);
   const bucketInput = { Bucket: bucket };
 
   try {
@@ -56,12 +57,11 @@ export const requireBucketName = async (
   return bucket;
 };
 
-export const listObjectsInBucket = async (
+export async function* listObjectsInBucket(
   s3: S3Client,
   bucket: string
-): Promise<_Object[]> => {
+): AsyncGenerator<_Object, void, undefined> {
   let isTruncated = false;
-  let objects: _Object[] = new Array();
   const input: ListObjectsCommandInput = {
     Bucket: bucket,
   };
@@ -69,29 +69,33 @@ export const listObjectsInBucket = async (
     const output = await s3.send(new ListObjectsCommand(input));
     isTruncated = output.IsTruncated ?? false;
     input.Marker = output.NextMarker;
-    objects = objects.concat(output.Contents ?? []);
+    const objects = output.Contents;
+    if (objects !== undefined) {
+      yield* objects;
+    }
   } while (isTruncated);
-  return objects;
-};
+}
 
-export const listObjects = async (s3: S3Client): Promise<_Object[]> => {
-  const buckets = await s3.send(new ListBucketsCommand({})).then((output) =>
-    output.Buckets?.reduce((previousValue, bucket) => {
-      if (bucket.Name?.startsWith(prefix)) {
-        previousValue.push(bucket.Name);
-      }
-      return previousValue;
-    }, new Array<string>())
-  );
+interface _BucketObject extends _Object {
+  Bucket: string;
+}
 
+export async function* listObjects(
+  s3: S3Client
+): AsyncGenerator<_BucketObject, void, undefined> {
+  const result = await s3.send(new ListBucketsCommand({}));
+  const buckets = result.Buckets?.reduce((previousValue, bucket) => {
+    if (bucket.Name?.startsWith(prefix)) {
+      previousValue.push(bucket.Name);
+    }
+    return previousValue;
+  }, new Array<string>());
   if (buckets === undefined) {
-    throw new Error("No buckets found");
+    return;
   }
-
-  const objects = await Promise.all(
-    buckets.map(async (bucket) => {
-      return await listObjectsInBucket(s3, bucket);
-    })
-  );
-  return objects.flat();
-};
+  for (const bucket of buckets) {
+    for await (const object of listObjectsInBucket(s3, bucket)) {
+      yield { ...object, Bucket: bucket };
+    }
+  }
+}

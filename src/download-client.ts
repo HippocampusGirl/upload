@@ -5,7 +5,7 @@ import { Request } from "got";
 import Joi from "joi";
 import jwt from "jsonwebtoken";
 import { createHash } from "node:crypto";
-import { FileHandle, open, stat } from "node:fs/promises";
+import { FileHandle, open } from "node:fs/promises";
 import { pipeline } from "node:stream/promises";
 import { join } from "path";
 import { Socket } from "socket.io-client";
@@ -14,11 +14,12 @@ import { requestOptions } from "./config.js";
 import { DownloadInfo } from "./download-info.js";
 import {
   ChecksumJob,
-  DownloadFileBase,
+  DownloadFilePart,
   DownloadJob
-} from "./download-parts.js";
+} from "./download-schema.js";
 import { touch } from "./fs.js";
 import { client } from "./http-client.js";
+import { parseRange } from "./part.js";
 import { Range } from "./range.js";
 import { makeClient } from "./socket-client.js";
 
@@ -86,9 +87,7 @@ export const makeDownloadCommand = () => {
   return command;
 };
 
-const makePath = (
-  job: DownloadJob | ChecksumJob | DownloadFileBase
-): string => {
+const makePath = (job: DownloadFilePart | ChecksumJob): string => {
   return join(job.name, job.path);
 };
 
@@ -96,7 +95,6 @@ class DownloadClient {
   socket: Socket;
   queue: queueAsPromised<DownloadJob, CompletedDownloadJob>;
 
-  // TODO garbage collect this
   downloadInfos: Map<string, DownloadInfo> = new Map();
 
   constructor(socket: Socket, numThreads: number) {
@@ -116,19 +114,40 @@ class DownloadClient {
   listen() {
     this.socket.on("download:create", async (downloadJob: DownloadJob) => {
       try {
+        parseRange(downloadJob);
+        debug(
+          "received partial download for %s in range %s",
+          downloadJob.path,
+          downloadJob.range.toString()
+        );
+
+        const path = makePath(downloadJob);
+        const downloadInfo = this.getDownloadInfo(path);
+        const success = await downloadInfo.addDownloadJob(downloadJob);
+        if (!success) {
+          debug(
+            "skipping download job for %s in range %s because it already exists",
+            downloadJob.path,
+            downloadJob.range.toString()
+          );
+          await this.socket.emitWithAck("download:complete", downloadJob);
+          return;
+        }
+
         await this.queue.push(downloadJob);
       } catch (error) {
-        debug(`Failed to process download job: ${error}`);
+        debug("failed to process download job: %o", error);
       }
     });
     this.socket.on("download:checksum", async (checksumJob: ChecksumJob) => {
       try {
-        const { checksumSha256 } = checksumJob;
+        const { checksumSHA256 } = checksumJob;
+
         const path = makePath(checksumJob);
         const downloadInfo = this.getDownloadInfo(path);
-        await downloadInfo.setChecksumSha256(checksumSha256);
+        await downloadInfo.setChecksumSHA256(checksumSHA256);
       } catch (error) {
-        debug(`Failed to process checksum job: ${error}`);
+        debug("failed to process checksum job: %o", error);
       }
     });
   }
@@ -137,7 +156,7 @@ class DownloadClient {
     readStream: Request,
     downloadJob: DownloadJob
   ): Promise<CompletedDownloadJob> {
-    const { start, end } = downloadJob;
+    const { start, end } = downloadJob.range;
     const path = makePath(downloadJob);
     await touch(path);
     let fileHandle: FileHandle | undefined;
@@ -176,7 +195,14 @@ class DownloadClient {
     }
     if (etag !== md5.digest("hex")) {
       throw new Error(
-        `Received invalid response from server: "etag" does not match MD5 checksum`
+        "Received invalid response from server: " +
+          '"etag" does not match MD5 checksum calculated from response body'
+      );
+    }
+    if (downloadJob.checksumMD5 !== etag) {
+      throw new Error(
+        "Received invalid response from server: " +
+          '"etag" does not match MD5 checksum received from server'
       );
     }
     return {
@@ -186,28 +212,18 @@ class DownloadClient {
   }
 
   async finalizeDownloadJob(downloadJob: CompletedDownloadJob): Promise<void> {
-    const path = makePath(downloadJob);
-    const downloadInfo = this.getDownloadInfo(path);
-    let { start, end } = downloadJob;
-    if (end === undefined) {
-      const fileSize = start + downloadJob.size;
-      const stats = await stat(path);
-      if (stats.size !== fileSize) {
-        throw new Error(
-          `File size does not match: ${stats.size} != ${fileSize}`
-        );
-      }
-      await downloadInfo.setSize(fileSize);
-      end = start + downloadJob.size - 1;
-    }
-    const range = new Range(start, end);
-    const isVerified = await downloadInfo.addRange(range);
+    const { range } = downloadJob;
     debug(
       "completed partial download for %s in range %s",
       downloadJob.path,
       range.toString()
     );
-    await this.socket.emitWithAck("download:complete", downloadJob, isVerified);
+
+    const path = makePath(downloadJob);
+    const downloadInfo = this.getDownloadInfo(path);
+    await downloadInfo.completePart(downloadJob);
+
+    await this.socket.emitWithAck("download:complete", downloadJob);
   }
 
   async runDownloadJob(

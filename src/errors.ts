@@ -9,3 +9,11 @@ export class UnauthorizedError extends Error {
     super(message);
   }
 }
+
+export interface UnknownError {
+  error: "unknown";
+}
+export interface UploadCreateExistsError {
+  error: "upload-exists";
+}
+export type UploadCreateError = UploadCreateExistsError | UnknownError;

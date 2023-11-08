@@ -2,7 +2,8 @@ import { Command } from "commander";
 import jwt from "jsonwebtoken";
 import { readFileSync } from "node:fs";
 
-import { Payload, payloadSchema, validate } from "./schema.js";
+import { Payload, payloadSchema } from "./payload.js";
+import { validate } from "./validate.js";
 
 export const makeCreateTokenCommand = (): Command => {
   const command = new Command();

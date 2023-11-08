@@ -1,144 +1,172 @@
 import Debug from "debug";
+import { DownloadJob } from "download-schema.js";
+import Joi from "joi";
 import { open } from "node:fs/promises";
 
 import { calculateChecksum, touch } from "./fs.js";
+import {
+  CompletePartJob,
+  Info,
+  InfoData,
+  InfoJob,
+  InfoPart,
+  SetChecksumSHA256Job
+} from "./info.js";
+import { Part } from "./part.js";
 import { Range, reduceRanges } from "./range.js";
+import { uploadInfoSchema } from "./upload-info.js";
 
 const debug = Debug("download-client");
 
-export class DownloadInfo {
-  basePath: string;
-  infoPath: string;
+interface AddDownloadJobJob extends InfoJob {
+  type: "add-download-job";
+  downloadJob: DownloadJob;
+}
+type DownloadInfoJob =
+  | SetChecksumSHA256Job
+  | AddDownloadJobJob
+  | CompletePartJob;
 
-  ranges?: Range[];
+interface DownloadInfoData extends InfoData {
+  complete: boolean;
+  verified: boolean;
+  parts: InfoPart[];
   size?: number;
-  checksumSha256?: string;
+  checksumSHA256?: string;
+}
+const downloadInfoSchema = uploadInfoSchema
+  .keys({
+    complete: Joi.boolean().required(),
+    verified: Joi.boolean().required(),
+  })
+  .required();
+const isDownloadInfoData = (data: unknown): data is DownloadInfoData => {
+  const { error } = downloadInfoSchema.validate(data);
+  return error === undefined;
+};
 
-  isVerified: boolean = false;
+interface CompleteDownloadInfoData extends DownloadInfoData {
+  complete: true;
+  size: number;
+  checksumSHA256: string;
+}
 
-  constructor(basePath: string) {
-    this.basePath = basePath;
-    this.infoPath = `${basePath}.download-info.json`;
+export class DownloadInfo extends Info<DownloadInfoJob, DownloadInfoData> {
+  constructor(path: string) {
+    super(path);
   }
 
-  async addRange(range: Range): Promise<boolean> {
-    if (this.isVerified) {
-      return true;
-    }
-
-    await this.load();
-    this.ranges = this.ranges ?? [];
-    this.ranges.push(range);
-
-    // Merge adjacent ranges
-    this.ranges = reduceRanges(this.ranges);
-    await this.save();
-
-    if (await this.isComplete()) {
-      await this.verifyChecksumSha256();
-      return this.isVerified;
-    }
-    return false;
+  protected get key(): string {
+    return `${this.path}.download-info.json`;
+  }
+  protected get defaultData(): DownloadInfoData {
+    return { parts: [], complete: false, verified: false };
+  }
+  public toString(): string {
+    return `${this.path}`;
   }
 
-  private async verifyChecksumSha256(): Promise<void> {
-    if (this.isVerified) {
-      // Ensure we only verify once
-      return;
-    }
-    await this.load();
-    const checksumSha256 = await calculateChecksum(this.basePath);
-    if (checksumSha256 !== this.checksumSha256) {
-      throw new Error(`Invalid checksum: ${checksumSha256}`);
-    }
-    this.isVerified = true;
-  }
-  async setChecksumSha256(checksumSha256: string): Promise<void> {
-    if (this.isVerified) {
-      return;
+  protected async load(): Promise<DownloadInfoData> {
+    if (this.data !== undefined) {
+      return this.data;
     }
 
-    await this.load();
-    this.checksumSha256 = checksumSha256;
-    await this.save();
-  }
+    await touch(this.key);
 
-  async setSize(size: number): Promise<void> {
-    if (this.isVerified) {
-      return;
-    }
-
-    await this.load();
-    this.size = size;
-    await this.save();
-  }
-
-  private async isComplete(): Promise<boolean> {
-    if (this.isVerified) {
-      return true;
-    }
-
-    await this.load();
-    if (this.size === undefined) {
-      return false;
-    }
-    if (this.ranges === undefined) {
-      return false;
-    }
-    if (this.ranges.length !== 1) {
-      return false;
-    }
-    const [range] = this.ranges;
-    const { start } = range;
-    return start == 0 && range.size() == this.size;
-  }
-
-  private async load(): Promise<void> {
-    await touch(this.infoPath);
     let fileHandle, buffer;
     try {
-      fileHandle = await open(this.infoPath, "r");
+      fileHandle = await open(this.key, "r");
       buffer = await fileHandle.readFile("utf8");
     } finally {
       await fileHandle?.close();
     }
 
-    if (buffer === undefined || buffer.length == 0) {
-      return;
-    }
-    const data = JSON.parse(buffer.toString());
-    if (typeof data !== "object" || data === null) {
-      return;
-    }
-
-    if (data.ranges !== undefined) {
-      this.ranges = data.ranges.map(
-        ({ start, end }: { start: number; end: number }) =>
-          new Range(start, end)
-      );
-    }
-    if (data.size !== undefined) {
-      this.size = data.size;
-    }
-    if (data.checksumSha256 !== undefined) {
-      this.checksumSha256 = data.checksumSha256;
-    }
+    const data = this.parse(buffer.toString(), isDownloadInfoData);
+    this.data = data;
+    return data;
   }
-  private async save(): Promise<void> {
-    const data = JSON.stringify(
-      {
-        ranges: this.ranges,
-        size: this.size,
-        checksumSha256: this.checksumSha256,
-      },
-      null,
-      2
+
+  protected async run(job: DownloadInfoJob): Promise<boolean> {
+    // debug("run job %o", job);
+    const data = await this.load();
+    let result: boolean | undefined = undefined;
+    switch (job.type) {
+      case "set-checksum-sha256":
+        data.checksumSHA256 = job.checksumSHA256;
+        break;
+      case "add-download-job":
+        result = this.runAddFilePart(job.downloadJob, data);
+        break;
+      case "complete-part":
+        this.runCompletePart(job.part, data);
+        break;
+    }
+    if (result === undefined) {
+      if (this.complete(data)) {
+        data.verified = await this.verified(data);
+      }
+      result = data.verified;
+    }
+    await this.save();
+    return result;
+  }
+
+  async setChecksumSHA256(checksumSHA256: string): Promise<boolean> {
+    return await this.queue.push({
+      type: "set-checksum-sha256",
+      checksumSHA256,
+    });
+  }
+  async addDownloadJob(downloadJob: DownloadJob): Promise<boolean> {
+    return await this.queue.push({ type: "add-download-job", downloadJob });
+  }
+  async completePart(part: Part): Promise<void> {
+    await this.queue.push({ type: "complete-part", part });
+  }
+
+  private async verified(data: CompleteDownloadInfoData): Promise<boolean> {
+    if (data.verified) {
+      return true;
+    }
+    const checksumSHA256 = await calculateChecksum(this.path, "sha256");
+    if (checksumSHA256 === data.checksumSHA256) {
+      debug("verified checksum for %s", this.path);
+      return true;
+    }
+    throw new Error(`invalid checksum for ${this.path}`);
+  }
+  private complete(data: DownloadInfoData): data is CompleteDownloadInfoData {
+    if (data.complete) {
+      return true;
+    }
+    if (data.size === undefined || data.checksumSHA256 === undefined) {
+      return false;
+    }
+    const ranges = reduceRanges(
+      data.parts
+        .filter(({ complete }) => complete)
+        .map(({ range }) => new Range(range.start, range.end))
     );
-    // debug(`saving download info ${data}`);
+    if (ranges.length !== 1) {
+      debug("incomplete ranges %o", ranges);
+      return false;
+    }
+    const [range] = ranges;
+    const { start } = range;
+    data.complete = start == 0 && range.size() == data.size;
+    if (!data.complete) {
+      debug("incomplete range %o for file size %s", range, data.size);
+    }
+    return data.complete;
+  }
+
+  protected async save(): Promise<void> {
+    const dataString = JSON.stringify(this.data, null, 2);
+    // debug(`saving download info ${dataString}`);
     let fileHandle;
     try {
-      fileHandle = await open(this.infoPath, "w");
-      await fileHandle.writeFile(data, "utf8");
+      fileHandle = await open(this.key, "w");
+      await fileHandle.writeFile(dataString, "utf8");
     } finally {
       await fileHandle?.close();
     }

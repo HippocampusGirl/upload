@@ -5,23 +5,24 @@ import fastq, { queueAsPromised } from "fastq";
 import { Request } from "got";
 import Joi from "joi";
 import jwt from "jsonwebtoken";
-import { createHash } from "node:crypto";
 import { FileHandle, open } from "node:fs/promises";
 import { PassThrough } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { Socket } from "socket.io-client";
 
-import { requestOptions } from "./config.js";
+import { requestOptions, retryCount } from "./config.js";
+import { UploadCreateError } from "./errors.js";
 import { calculateChecksum } from "./fs.js";
 import { client } from "./http-client.js";
-import { Range } from "./range.js";
+import { parseRange } from "./part.js";
 import { makeClient } from "./socket-client.js";
 import {
-  generateUploadOptions,
+  generateUploadRequests,
   RangeOptions,
-  UploadJob
+  UploadJob,
+  UploadRequest
 } from "./upload-parts.js";
-import { gauge, resetProgress, updateProgress } from "./upload-progress.js";
+import { Progress } from "./upload-progress.js";
 
 interface CompletedUploadJob extends UploadJob {}
 
@@ -103,6 +104,8 @@ class UploadClient {
   socket: Socket;
   queue: queueAsPromised<UploadJob, CompletedUploadJob>;
 
+  progress: Progress = new Progress();
+
   constructor(socket: Socket, numThreads: number) {
     this.socket = socket;
     this.queue = fastq.promise(this, this.runUploadJob, numThreads);
@@ -112,9 +115,9 @@ class UploadClient {
     writeStream: Request,
     uploadJob: UploadJob
   ): Promise<void> {
-    const { path, range } = uploadJob;
+    const { progress } = this;
+    const { path, range, checksumMD5 } = uploadJob;
     let fileHandle: FileHandle | undefined;
-    const md5 = createHash("md5");
     try {
       fileHandle = await open(path);
       const readStream = fileHandle.createReadStream({
@@ -125,8 +128,7 @@ class UploadClient {
         readStream,
         async function* (source: AsyncIterable<Buffer>) {
           for await (const chunk of source) {
-            md5.update(chunk);
-            gauge.pulse();
+            progress.gauge.pulse();
             yield chunk;
           }
         },
@@ -142,7 +144,7 @@ class UploadClient {
         `Received invalid response from server: "etag" needs to be a string`
       );
     }
-    if (etag !== md5.digest("hex")) {
+    if (etag !== checksumMD5) {
       throw new Error(
         `Received invalid response from server: "etag" does not match MD5 checksum`
       );
@@ -150,8 +152,6 @@ class UploadClient {
   }
 
   async runUploadJob(uploadJob: UploadJob): Promise<CompletedUploadJob> {
-    const { start, end } = uploadJob.range;
-    uploadJob.range = new Range(start, end);
     const { url, range } = uploadJob;
     const writeStream: Request = client.stream.put(url, {
       headers: {
@@ -181,31 +181,79 @@ class UploadClient {
   }
 
   async finalizeUploadJob(uploadJob: CompletedUploadJob): Promise<void> {
-    updateProgress(uploadJob);
-    debug(
-      "completed partial upload for %s in range %s",
-      uploadJob.path,
-      uploadJob.range.toString()
-    );
+    this.progress.completePart(uploadJob);
+    // debug(
+    //   "completed partial upload for %s in range %s",
+    //   uploadJob.path,
+    //   uploadJob.range.toString()
+    // );
     await this.socket.emitWithAck("upload:complete", uploadJob);
   }
 
   async submitChecksum(path: string): Promise<void> {
-    const checksumSha256 = await calculateChecksum(path);
-    await this.socket.emitWithAck("upload:checksum", path, checksumSha256);
+    const checksumSHA256 = await calculateChecksum(path, "sha256");
+    await this.socket.emitWithAck("upload:checksum", path, checksumSHA256);
   }
 
   async submitPaths(paths: string[], options: RangeOptions): Promise<void> {
-    const uploadJobs: UploadJob[] = new Array();
-    for await (const uploadOptions of generateUploadOptions(paths, options)) {
-      uploadJobs.push(
-        ...(await this.socket.emitWithAck("upload:create", uploadOptions))
-      );
+    let uploadRequests: UploadRequest[] = new Array();
+
+    const createUploadJobs = async (
+      uploadRequests: UploadRequest[]
+    ): Promise<void> => {
+      if (uploadRequests.length === 0) {
+        return;
+      }
+      let results;
+      while (true) {
+        try {
+          results = (await this.socket
+            .timeout(5000)
+            .emitWithAck("upload:create", uploadRequests)) as (
+            | UploadJob
+            | UploadCreateError
+          )[];
+          break;
+        } catch (error) {}
+      }
+      for (const [index, result] of results.entries()) {
+        if ("error" in result) {
+          const { error } = result;
+          const uploadRequest = uploadRequests[index];
+          if (error == "upload-exists") {
+            this.progress.addPart(uploadRequest);
+            this.progress.completePart(uploadRequest);
+          } else {
+            debug(
+              'skipping upload job because "%s" for %s in range %s',
+              result.error,
+              uploadRequest.path,
+              uploadRequest.range.toString()
+            );
+          }
+          continue;
+        }
+        parseRange(result);
+        // debug(
+        //   "received partial upload for %s in range %s",
+        //   result.path,
+        //   result.range.toString()
+        // );
+        promises.push(this.queue.push(result));
+        this.progress.addPart(result);
+      }
+    };
+
+    const promises: Promise<any>[] = [...paths.map(this.submitChecksum, this)];
+    for await (const uploadRequest of generateUploadRequests(paths, options)) {
+      uploadRequests.push(uploadRequest);
+
+      if (uploadRequests.length > 100) {
+        await createUploadJobs(uploadRequests);
+        uploadRequests = new Array();
+      }
     }
-    resetProgress(uploadJobs);
-    await Promise.all([
-      ...uploadJobs.map(this.queue.push),
-      ...paths.map(this.submitChecksum, this),
-    ]);
+    await createUploadJobs(uploadRequests);
+    await Promise.all(promises);
   }
 }

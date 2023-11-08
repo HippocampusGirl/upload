@@ -7,7 +7,7 @@
   "scripts": {
     "build": "node ./build.mjs",
     "start": "npm run build && ./upload.cjs",
-    "serve": "concurrently --kill-others './build.mjs watch' 'nodemon --quiet ./upload.cjs serve --debug --port 13481 --public-key-file public.pem'"
+    "serve": "concurrently --kill-others './build.mjs watch' 'nodemon --quiet ./upload.cjs serve --port 13481 --public-key-file public.pem'"
   },
   "author": "Lea Waller <lea@lea.science>",
   "license": "GPL-3.0-or-later",
@@ -27,7 +27,6 @@
     "joi": "^17.11.0",
     "jsonwebtoken": "^9.0.2",
     "memoizee": "^0.4.15",
-    "simple-eta": "^3.0.2",
     "socket.io": "^4.7.2",
     "socket.io-client": "^4.7.2"
   },

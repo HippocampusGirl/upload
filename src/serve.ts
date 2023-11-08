@@ -6,11 +6,11 @@ import { Server, Socket } from "socket.io";
 
 import { S3Client } from "@aws-sdk/client-s3";
 
-import { registerDownloadHandlers } from "./download-server.js";
+import { DownloadServer } from "./download-server.js";
 import { UnauthorizedError } from "./errors.js";
-import { Payload } from "./schema.js";
+import { Payload } from "./payload.js";
 import { makeS3Client, requireBucketName } from "./storage.js";
-import { registerUploadHandlers } from "./upload-server.js";
+import { UploadServer } from "./upload-server.js";
 
 // Allow socket to store payload
 declare module "socket.io" {
@@ -23,6 +23,9 @@ interface ExtendedSocket {
 }
 interface ExtendedServer {
   s3: S3Client;
+
+  uploadServer: UploadServer;
+  downloadServer: DownloadServer;
 }
 
 const debug = Debug("serve");
@@ -88,9 +91,11 @@ export const serve = (port: number, publicKey: string) => {
     return next();
   });
 
+  io.uploadServer = new UploadServer(io);
+  io.downloadServer = new DownloadServer(io);
   io.on("connection", (socket: Socket) => {
-    registerUploadHandlers(io, socket);
-    registerDownloadHandlers(io, socket);
+    io.uploadServer.listen(socket);
+    io.downloadServer.listen(socket);
   });
 
   // Exit on unhandled error
