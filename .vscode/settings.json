@@ -4,5 +4,8 @@
     "importSorter.importStringConfiguration.maximumNumberOfImportExpressionsPerLine.type": "newLineEachExpressionAfterCountLimitExceptIfOnlyOne",
     "importSorter.importStringConfiguration.maximumNumberOfImportExpressionsPerLine.count": 80,
     "importSorter.importStringConfiguration.tabSize": 2,
-    "importSorter.importStringConfiguration.quoteMark": "double"
+    "importSorter.importStringConfiguration.quoteMark": "double",
+    "files.exclude": {
+        "upload.cjs": true,
+    }
 }
