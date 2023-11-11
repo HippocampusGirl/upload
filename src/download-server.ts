@@ -98,6 +98,9 @@ export class DownloadServer {
 
         const path = getPathFromPathname(object.Key);
         const uploadInfo = uploadServer.getUploadInfo(object.Bucket, path);
+        if (await uploadInfo.isVerified()) {
+          continue;
+        }
         if (object.Key.endsWith(UploadInfo.suffix)) {
           this.submitChecksumJob(uploadInfo);
           continue;

@@ -62,6 +62,10 @@ export abstract class Info<J> {
   protected abstract load(): Promise<InfoData>;
   protected abstract save(): Promise<void>;
 
+  public async isVerified(): Promise<boolean> {
+    const data = await this.load();
+    return data.verified;
+  }
   public abstract toString(): string;
 
   protected findUploadPart(query: Part, data: InfoData): InfoPart | undefined {
