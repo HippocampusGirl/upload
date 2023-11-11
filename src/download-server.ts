@@ -46,7 +46,7 @@ export class DownloadServer {
   }
 
   listen(socket: Socket) {
-    const { s3 } = this.io;
+    const { uploadServer, s3 } = this.io;
     socket.on(
       "download:complete",
       async (downloadJob: DownloadJob, callback: () => void) => {
@@ -56,8 +56,24 @@ export class DownloadServer {
       }
     );
     socket.on(
-      "checksum:complete",
+      "download:verified",
       async (downloadJob: DownloadJob, callback: () => void) => {
+        const input = getInputFromURL(downloadJob.url);
+        if (input.Bucket === undefined) {
+          throw new Error('"input.Bucket" is undefined');
+        }
+
+        const { path } = downloadJob;
+        const pathFromURL = getPathFromURL(downloadJob.url);
+        if (path !== pathFromURL) {
+          throw new Error(
+            `Mismatched path between job and upload URL: ` +
+              `${path} != ${pathFromURL}`
+          );
+        }
+
+        const uploadInfo = uploadServer.getUploadInfo(input.Bucket, path);
+        await uploadInfo.setVerified();
         callback();
       }
     );

@@ -28,7 +28,7 @@ export const makeS3Client = (): S3Client => {
   });
 };
 
-const getBucketName = (name: string): string => `${prefix}${name}`;
+export const getBucketName = (name: string): string => `${prefix}${name}`;
 export const requireBucketName = async (
   s3: S3Client,
   name: string,

@@ -123,8 +123,8 @@ class DownloadClient {
 
         const path = makePath(downloadJob);
         const downloadInfo = this.getDownloadInfo(path);
-        const success = await downloadInfo.addDownloadJob(downloadJob);
-        if (!success) {
+        const run = await downloadInfo.addDownloadJob(downloadJob);
+        if (!run) {
           debug(
             "skipping download job for %s in range %s because it already exists",
             downloadJob.path,
@@ -221,9 +221,13 @@ class DownloadClient {
 
     const path = makePath(downloadJob);
     const downloadInfo = this.getDownloadInfo(path);
-    await downloadInfo.completePart(downloadJob);
+    const verified = await downloadInfo.completePart(downloadJob);
 
     await this.socket.emitWithAck("download:complete", downloadJob);
+
+    if (verified) {
+      await this.socket.emitWithAck("download:verified", downloadJob);
+    }
   }
 
   async runDownloadJob(

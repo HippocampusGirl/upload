@@ -1,5 +1,4 @@
 import Debug from "debug";
-import Joi from "joi";
 
 import {
   GetObjectCommand,
@@ -20,7 +19,7 @@ import {
   InfoPart,
   SetChecksumSHA256Job
 } from "./info.js";
-import { Part, partSchema } from "./part.js";
+import { Part } from "./part.js";
 import { UploadRequest } from "./upload-parts.js";
 
 const debug = Debug("serve");
@@ -29,31 +28,16 @@ interface AddUploadRequestJob extends InfoJob {
   type: "add-upload-request";
   uploadRequest: UploadRequest;
 }
+interface SetVerifiedJob extends InfoJob {
+  type: "set-verified";
+}
 type UploadInfoJob =
   | SetChecksumSHA256Job
   | AddUploadRequestJob
-  | CompletePartJob;
+  | CompletePartJob
+  | SetVerifiedJob;
 
-interface UploadInfoData extends InfoData {
-  parts: InfoPart[];
-  size?: number;
-  checksumSHA256?: string;
-}
-export const uploadInfoSchema = Joi.object({
-  parts: Joi.array().items(
-    partSchema.keys({
-      complete: Joi.boolean().required(),
-    })
-  ),
-  size: Joi.number(),
-  checksumSHA256: Joi.string(),
-}).required();
-const isUploadInfoData = (data: unknown): data is UploadInfoData => {
-  const { error } = uploadInfoSchema.validate(data);
-  return error === undefined;
-};
-
-export class UploadInfo extends Info<UploadInfoJob, UploadInfoData> {
+export class UploadInfo extends Info<UploadInfoJob> {
   private s3: S3Client;
   public readonly bucket: string;
 
@@ -70,9 +54,6 @@ export class UploadInfo extends Info<UploadInfoJob, UploadInfoData> {
   protected get key(): string {
     return `${this.path}${delimiter}${UploadInfo.suffix}`;
   }
-  protected get defaultData(): UploadInfoData {
-    return { parts: [] };
-  }
   protected get input(): GetObjectCommandInput {
     return {
       Bucket: this.bucket,
@@ -83,7 +64,7 @@ export class UploadInfo extends Info<UploadInfoJob, UploadInfoData> {
     return `${this.bucket} ${this.path}`;
   }
 
-  protected async load(): Promise<UploadInfoData> {
+  protected async load(): Promise<InfoData> {
     if (this.data !== undefined) {
       return this.data;
     }
@@ -104,7 +85,7 @@ export class UploadInfo extends Info<UploadInfoJob, UploadInfoData> {
       throw new Error(`Invalid response from s3: "body" is undefined`);
     }
 
-    const data = this.parse(body, isUploadInfoData);
+    const data = this.parse(body);
     this.data = data;
     // debug("load data %O", data);
     return data;
@@ -127,6 +108,10 @@ export class UploadInfo extends Info<UploadInfoJob, UploadInfoData> {
         break;
       case "complete-part":
         result = this.runCompletePart(job.part, data);
+        save = true;
+        break;
+      case "set-verified":
+        data.verified = true;
         save = true;
         break;
     }
@@ -172,6 +157,9 @@ export class UploadInfo extends Info<UploadInfoJob, UploadInfoData> {
   }
   async completePart(part: Part): Promise<void> {
     await this.queue.push({ type: "complete-part", part });
+  }
+  async setVerified(): Promise<void> {
+    await this.queue.push({ type: "set-verified" });
   }
   async getPart(query: Part): Promise<InfoPart> {
     const data = await this.load();

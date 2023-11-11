@@ -14,7 +14,6 @@ import {
 } from "./info.js";
 import { Part } from "./part.js";
 import { Range, reduceRanges } from "./range.js";
-import { uploadInfoSchema } from "./upload-info.js";
 
 const debug = Debug("download-client");
 
@@ -27,31 +26,13 @@ type DownloadInfoJob =
   | AddDownloadJobJob
   | CompletePartJob;
 
-interface DownloadInfoData extends InfoData {
-  complete: boolean;
-  verified: boolean;
-  parts: InfoPart[];
-  size?: number;
-  checksumSHA256?: string;
-}
-const downloadInfoSchema = uploadInfoSchema
-  .keys({
-    complete: Joi.boolean().required(),
-    verified: Joi.boolean().required(),
-  })
-  .required();
-const isDownloadInfoData = (data: unknown): data is DownloadInfoData => {
-  const { error } = downloadInfoSchema.validate(data);
-  return error === undefined;
-};
-
-interface CompleteDownloadInfoData extends DownloadInfoData {
+interface CompleteInfoData extends InfoData {
   complete: true;
   size: number;
   checksumSHA256: string;
 }
 
-export class DownloadInfo extends Info<DownloadInfoJob, DownloadInfoData> {
+export class DownloadInfo extends Info<DownloadInfoJob> {
   constructor(path: string) {
     super(path);
   }
@@ -59,14 +40,11 @@ export class DownloadInfo extends Info<DownloadInfoJob, DownloadInfoData> {
   protected get key(): string {
     return `${this.path}.download-info.json`;
   }
-  protected get defaultData(): DownloadInfoData {
-    return { parts: [], complete: false, verified: false };
-  }
   public toString(): string {
     return `${this.path}`;
   }
 
-  protected async load(): Promise<DownloadInfoData> {
+  protected async load(): Promise<InfoData> {
     if (this.data !== undefined) {
       return this.data;
     }
@@ -81,7 +59,7 @@ export class DownloadInfo extends Info<DownloadInfoJob, DownloadInfoData> {
       await fileHandle?.close();
     }
 
-    const data = this.parse(buffer.toString(), isDownloadInfoData);
+    const data = this.parse(buffer.toString());
     this.data = data;
     return data;
   }
@@ -102,8 +80,10 @@ export class DownloadInfo extends Info<DownloadInfoJob, DownloadInfoData> {
         break;
     }
     if (result === undefined) {
-      if (this.complete(data)) {
-        data.verified = await this.verified(data);
+      if (!data.verified) {
+        if (this.complete(data)) {
+          data.verified = await this.verified(data);
+        }
       }
       result = data.verified;
     }
@@ -117,14 +97,25 @@ export class DownloadInfo extends Info<DownloadInfoJob, DownloadInfoData> {
       checksumSHA256,
     });
   }
+  /**
+   * Add a download job to the info
+   * @param downloadJob - The download job to add
+   * @returns true the download job was added and false if the
+   * download job already exists on the client and can be skipped
+   */
   async addDownloadJob(downloadJob: DownloadJob): Promise<boolean> {
     return await this.queue.push({ type: "add-download-job", downloadJob });
   }
-  async completePart(part: Part): Promise<void> {
-    await this.queue.push({ type: "complete-part", part });
+  /**
+   * Mark a part as complete
+   * @param part - The download part that was completed
+   * @returns true if the file is now complete and verified, otherwise false
+   */
+  async completePart(part: Part): Promise<boolean> {
+    return await this.queue.push({ type: "complete-part", part });
   }
 
-  private async verified(data: CompleteDownloadInfoData): Promise<boolean> {
+  private async verified(data: CompleteInfoData): Promise<boolean> {
     if (data.verified) {
       return true;
     }
@@ -135,10 +126,7 @@ export class DownloadInfo extends Info<DownloadInfoJob, DownloadInfoData> {
     }
     throw new Error(`invalid checksum for ${this.path}`);
   }
-  private complete(data: DownloadInfoData): data is CompleteDownloadInfoData {
-    if (data.complete) {
-      return true;
-    }
+  private complete(data: InfoData): data is CompleteInfoData {
     if (data.size === undefined || data.checksumSHA256 === undefined) {
       return false;
     }
@@ -148,16 +136,16 @@ export class DownloadInfo extends Info<DownloadInfoJob, DownloadInfoData> {
         .map(({ range }) => new Range(range.start, range.end))
     );
     if (ranges.length !== 1) {
-      debug("incomplete ranges %o", ranges);
+      // debug("incomplete ranges %o", ranges);
       return false;
     }
     const [range] = ranges;
     const { start } = range;
-    data.complete = start == 0 && range.size() == data.size;
-    if (!data.complete) {
-      debug("incomplete range %o for file size %s", range, data.size);
-    }
-    return data.complete;
+    const complete = start == 0 && range.size() == data.size;
+    // if (!complete) {
+    //   debug("incomplete range %o for file size %s", range, data.size);
+    // }
+    return complete;
   }
 
   protected async save(): Promise<void> {

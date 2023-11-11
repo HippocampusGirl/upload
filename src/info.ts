@@ -1,6 +1,7 @@
 import fastq, { queueAsPromised } from "fastq";
+import Joi from "joi";
 
-import { FilePart, parseRange, Part } from "./part.js";
+import { FilePart, parseRange, Part, partSchema } from "./part.js";
 
 export interface InfoPart extends Part {
   complete: boolean;
@@ -8,7 +9,24 @@ export interface InfoPart extends Part {
 export interface InfoData {
   parts: InfoPart[];
   size?: number;
+  verified: boolean;
+  checksumSHA256?: string;
 }
+export const infoDataSchema = Joi.object({
+  parts: Joi.array().items(
+    partSchema.keys({
+      complete: Joi.boolean().required(),
+    })
+  ),
+  size: Joi.number(),
+  checksumSHA256: Joi.string(),
+  verified: Joi.boolean().required(),
+}).required();
+const isInfoData = (data: unknown): data is InfoData => {
+  const { error } = infoDataSchema.validate(data);
+  return error === undefined;
+};
+
 export interface InfoJob {
   type: string;
   [key: string]: any;
@@ -23,12 +41,12 @@ export interface CompletePartJob extends InfoJob {
   part: Part;
 }
 
-export abstract class Info<J, D extends InfoData> {
+export abstract class Info<J> {
   public readonly path: string;
 
   protected queue: queueAsPromised<J, boolean>;
 
-  protected data?: D;
+  protected data?: InfoData;
 
   constructor(path: string) {
     this.path = path;
@@ -36,14 +54,17 @@ export abstract class Info<J, D extends InfoData> {
   }
 
   protected abstract get key(): string;
-  protected abstract get defaultData(): D;
   protected abstract run(job: J): Promise<boolean>;
-  protected abstract load(): Promise<D>;
+
+  protected get defaultData(): InfoData {
+    return { parts: [], verified: false };
+  }
+  protected abstract load(): Promise<InfoData>;
   protected abstract save(): Promise<void>;
 
   public abstract toString(): string;
 
-  protected findUploadPart(query: Part, data: D): InfoPart | undefined {
+  protected findUploadPart(query: Part, data: InfoData): InfoPart | undefined {
     const parts = data.parts.filter((part) => part.range.equals(query.range));
     if (parts.length !== 1) {
       return;
@@ -51,7 +72,7 @@ export abstract class Info<J, D extends InfoData> {
     const [part] = parts;
     return part;
   }
-  protected runAddFilePart(filePart: FilePart, data: D): boolean {
+  protected runAddFilePart(filePart: FilePart, data: InfoData): boolean {
     const part = this.findUploadPart(filePart, data);
     if (part !== undefined) {
       return !part.complete;
@@ -68,7 +89,7 @@ export abstract class Info<J, D extends InfoData> {
     }
     return true;
   }
-  protected runCompletePart(query: Part, data: D): boolean {
+  protected runCompletePart(query: Part, data: InfoData): boolean {
     const part = this.findUploadPart(query, data);
     if (part === undefined) {
       const rangeString = query.range.toString();
@@ -84,7 +105,7 @@ export abstract class Info<J, D extends InfoData> {
     return true;
   }
 
-  protected parse(body: string, isD: (u: unknown) => u is D): D {
+  protected parse(body: string): InfoData {
     let data;
     try {
       data = JSON.parse(body);
@@ -94,7 +115,7 @@ export abstract class Info<J, D extends InfoData> {
     if (typeof data !== "object" || data === null) {
       return this.defaultData;
     }
-    if (!isD(data)) {
+    if (!isInfoData(data)) {
       throw new Error(`Invalid download info data for ${this.path}: ${body}`);
     }
     data.parts.map((part) => parseRange(part));
