@@ -4,10 +4,13 @@
   "description": "A software for data transfers via the cloud",
   "main": "src/index.ts",
   "type": "module",
+  "bin": {
+    "upload": "./upload.cjs"
+  },
   "scripts": {
-    "build": "node ./build.mjs",
-    "start": "npm run build && ./upload.cjs",
-    "serve": "concurrently --kill-others './build.mjs watch' 'nodemon --quiet ./upload.cjs serve --port 13481 --public-key-file public.pem'"
+    "build": "node build.mjs",
+    "start": "npm run build && node upload.cjs",
+    "serve": "concurrently --kill-others './build.mjs watch' 'nodemon --quiet node upload.cjs serve --port 13481 --public-key-file public.pem'"
   },
   "author": "Lea Waller <lea@lea.science>",
   "license": "GPL-3.0-or-later",
@@ -16,7 +19,6 @@
     "@aws-sdk/s3-request-presigner": "^3.440.0",
     "@socket.io/admin-ui": "^0.5.1",
     "bytes": "^3.1.2",
-    "cloudflare": "^2.9.1",
     "commander": "^11.1.0",
     "debug": "^4.3.4",
     "dotenv": "^16.3.1",
@@ -32,8 +34,6 @@
   },
   "devDependencies": {
     "@types/bytes": "^3.1.3",
-    "@types/cloudflare": "^2.7.12",
-    "@types/commander": "^2.12.2",
     "@types/debug": "^4.1.10",
     "@types/dotenv": "^8.2.0",
     "@types/format-duration": "^1.0.2",

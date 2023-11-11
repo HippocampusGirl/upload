@@ -11,13 +11,7 @@ const writeWithShebang = async (result) => {
   let fileHandle;
   try {
     fileHandle = await open("upload.cjs", "w", 0o755);
-    await fileHandle.writeFile(
-      "#!/usr/bin/env -S node " +
-        "--enable-source-maps " +
-        "--report-uncaught-exception " +
-        "--report-on-signal " +
-        "--report-on-fatalerror \n"
-    );
+    await fileHandle.writeFile(`#!${process.argv[0]} --enable-source-maps \n`);
     await fileHandle.writeFile(contents);
   } finally {
     await fileHandle?.close();
@@ -57,7 +51,7 @@ watchCommand.name(`watch`).action(async () => {
 const command = new Command()
   .name(`build.mjs`)
   .showHelpAfterError()
-  .addCommand(rebuildCommand)
+  .addCommand(rebuildCommand, { isDefault: true })
   .addCommand(watchCommand);
 
 await command.parseAsync(process.argv);
