@@ -56,27 +56,30 @@ in {
         LockPersonality = true;
         NoNewPrivileges = true;
         MemoryDenyWriteExecute = true;
+        ProcSubset = "pid";
+
+        ProtectSystem = "full";
+        ProtectHome = true;
         PrivateDevices = true;
         PrivateMounts = true;
         PrivateTmp = true;
         PrivateUsers = true;
-        ProcSubset = "pid";
         ProtectClock = true;
         ProtectControlGroups = true;
-        ProtectHome = true;
         ProtectHostname = true;
         ProtectKernelLogs = true;
         ProtectKernelModules = true;
         ProtectKernelTunables = true;
         ProtectProc = "invisible";
-        ProtectSystem = "full";
+
         RemoveIPC = true;
         RestrictAddressFamilies = [ "AF_INET" "AF_INET6" ];
         RestrictNamespaces = true;
         RestrictRealtime = true;
         RestrictSUIDSGID = true;
         SystemCallArchitectures = "native";
-        SystemCallFilter = [ "@system-service" "~@privileged" ];
+        SystemCallFilter =
+          [ "@network-io" "@system-service" "~@privileged" "~@resources" ];
         UMask = "0077";
       };
     };
