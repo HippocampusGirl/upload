@@ -3,7 +3,7 @@ pkgs.buildNpmPackage {
   name = "upload";
   src = ./.;
 
-  npmDepsHash = "sha256-fHzatTaFHDDlS1N4QB82GkdPk44ocUS9M94c02oqKz0=";
+  npmDepsHash = "sha256-vs6616V1QuLWdRRBRHoetCyuXAsvC5u7qcdVKuOZK4g=";
 
   installPhase = ''
     runHook preInstall
