@@ -51,11 +51,12 @@ in {
         Restart = "on-failure";
         Type = "oneshot";
 
-        # Hardening
+        # Hardening based on https://github.com/fort-nix/nix-bitcoin/blob/master/pkgs/lib.nix
         CapabilityBoundingSet = "";
         LockPersonality = true;
         NoNewPrivileges = true;
-        MemoryDenyWriteExecute = true;
+        # Required for JIT compilation
+        MemoryDenyWriteExecute = false;
         ProcSubset = "pid";
 
         ProtectSystem = "full";
@@ -82,9 +83,13 @@ in {
         SystemCallFilter = [
           "@basic-io"
           "@network-io"
+          "@pkey" # Required by nodejs >= 18
+          # @system-service is defined in src/shared/seccomp-util.c (systemd source)
           "@system-service"
           "~@privileged"
           "~@resources"
+          # docker seccomp blacklist (except for "clone" which is a core requirement for systemd services)
+          "~add_key kcmp keyctl mbind move_pages name_to_handle_at personality process_vm_readv process_vm_writev request_key setns unshare userfaultfd"
         ];
         UMask = "0077";
       };
