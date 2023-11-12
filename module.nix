@@ -78,6 +78,7 @@ in {
         RestrictRealtime = true;
         RestrictSUIDSGID = true;
         SystemCallArchitectures = "native";
+        SystemCallErrorNumber = "EPERM";
         SystemCallFilter = [
           "@basic-io"
           "@network-io"
