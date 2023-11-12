@@ -78,8 +78,13 @@ in {
         RestrictRealtime = true;
         RestrictSUIDSGID = true;
         SystemCallArchitectures = "native";
-        SystemCallFilter =
-          [ "@network-io" "@system-service" "~@privileged" "~@resources" ];
+        SystemCallFilter = [
+          "@basic-io"
+          "@network-io"
+          "@system-service"
+          "~@privileged"
+          "~@resources"
+        ];
         UMask = "0077";
       };
     };
