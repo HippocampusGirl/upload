@@ -6,30 +6,28 @@
   };
 
   outputs = { self, nixpkgs, flake-utils }:
-    flake-utils.lib.eachDefaultSystem (system:
+    {
+      overlay = import ./overlay.nix { inherit self; };
+      nixosModules.upload = import ./module.nix;
+    } // flake-utils.lib.eachDefaultSystem (system:
       let
         lib = nixpkgs.lib;
         pkgs = nixpkgs.legacyPackages.${system};
 
-        nodejs = pkgs.nodejs_21;
-        buildInputs = with pkgs; [
-          awscli
-          nodejs
-          nodePackages.pnpm
-          nodePackages.typescript
-          nodePackages.typescript-language-server
-        ];
-        upload = pkgs.callPackage ./. { inherit buildInputs nodejs; };
+        upload = pkgs.callPackage ./. { };
       in {
-        devShells.default = pkgs.mkShell { inherit buildInputs; };
+        devShells.default = pkgs.mkShell {
+          buildInputs = with pkgs; [
+            awscli
+            nodejs_21
+            nodePackages.pnpm
+            nodePackages.typescript
+            nodePackages.typescript-language-server
+          ];
+        };
         packages = {
           default = upload;
           upload = upload;
         };
-      }) // {
-        overlay = final: prev: {
-          upload = final.callPackage ./default.nix { };
-        };
-        nixosModules.upload = import ./nixos.nix;
-      };
+      });
 }

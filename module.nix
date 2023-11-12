@@ -1,5 +1,7 @@
 { pkgs, lib, config, ... }:
-let cfg = config.services.upload-server;
+let
+  cfg = config.services.upload-server;
+  upload = pkgs.callPackage ./. { };
 in {
   options = with lib; {
     services.upload-server = {
@@ -41,7 +43,7 @@ in {
         export ENDPOINT="$(cat ${cfg.s3.endpointFile})"
         export ACCESS_KEY_ID="$(cat ${cfg.s3.accessKeyIdFile})"
         export SECRET_ACCESS_KEY="$(cat ${cfg.s3.secretAccessKeyFile})"
-        ${pkgs.upload}/bin/upload.cjs serve \
+        ${upload}/bin/upload.cjs serve \
           --port "${toString cfg.port}" \
           --public-key-file "${cfg.publicKeyFile}"
       '';

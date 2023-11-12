@@ -1,7 +1,5 @@
-{ pkgs, lib, buildInputs, nodejs }:
+{ pkgs, lib }:
 pkgs.buildNpmPackage {
-  inherit buildInputs nodejs;
-
   name = "upload";
   src = ./.;
 
