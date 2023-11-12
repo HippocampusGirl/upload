@@ -19,6 +19,7 @@
           nodePackages.typescript
           nodePackages.typescript-language-server
         ];
+        upload = pkgs.callPackage ./. { inherit buildInputs nodejs; };
       in {
         devShells.default = pkgs.mkShell { inherit buildInputs; };
         packages = {
