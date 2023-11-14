@@ -4,6 +4,12 @@ import { Command } from "commander";
 import * as esbuild from "esbuild";
 import { open } from "node:fs/promises";
 
+let nodeExecutable = process.argv[0];
+if (!nodeExecutable.includes("nix")) {
+  // We are not running in a Nix shell, so we can use `env` to find the node executable
+  nodeExecutable = "/usr/bin/env node";
+}
+
 const writeWithShebang = async (result) => {
   const { outputFiles } = result;
   const [outputFile] = outputFiles;
@@ -11,7 +17,7 @@ const writeWithShebang = async (result) => {
   let fileHandle;
   try {
     fileHandle = await open("upload.cjs", "w", 0o755);
-    await fileHandle.writeFile(`#!${process.argv[0]} --enable-source-maps \n`);
+    await fileHandle.writeFile(`#!${nodeExecutable} --enable-source-maps \n`);
     await fileHandle.writeFile(contents);
   } finally {
     await fileHandle?.close();
