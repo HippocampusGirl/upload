@@ -1,9 +1,11 @@
 import Debug from "debug";
-import { io, Socket } from "socket.io-client";
+import { io } from "socket.io-client";
+
+import { _ClientSocket } from "./socket.js";
 
 const debug = Debug("socket-client");
 
-export const makeClient = (endpoint: string, token: string): Socket => {
+export const makeClient = (endpoint: string, token: string): _ClientSocket => {
   const socket = io(endpoint, {
     auth: { token },
   });

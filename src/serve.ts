@@ -9,6 +9,7 @@ import { S3Client } from "@aws-sdk/client-s3";
 import { DownloadServer } from "./download-server.js";
 import { UnauthorizedError } from "./errors.js";
 import { Payload } from "./payload.js";
+import { _Server } from "./socket.js";
 import { makeS3Client, requireBucketName } from "./storage.js";
 import { UploadServer } from "./upload-server.js";
 
@@ -56,7 +57,7 @@ export const makeServeCommand = () => {
 
 export const serve = (port: number, publicKey: string) => {
   // Set up socket.io
-  const io = new Server(port);
+  const io: _Server = new Server(port);
   io.s3 = makeS3Client();
 
   // Handle authorization

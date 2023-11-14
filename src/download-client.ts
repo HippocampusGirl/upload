@@ -8,7 +8,6 @@ import { createHash } from "node:crypto";
 import { FileHandle, open } from "node:fs/promises";
 import { pipeline } from "node:stream/promises";
 import { join } from "path";
-import { Socket } from "socket.io-client";
 
 import { requestOptions } from "./config.js";
 import { DownloadInfo } from "./download-info.js";
@@ -22,6 +21,7 @@ import { client } from "./http-client.js";
 import { parseRange } from "./part.js";
 import { Range } from "./range.js";
 import { makeClient } from "./socket-client.js";
+import { _ClientSocket } from "./socket.js";
 
 interface CompletedDownloadJob extends DownloadJob {
   size: number;
@@ -92,12 +92,12 @@ const makePath = (job: DownloadFilePart | ChecksumJob): string => {
 };
 
 class DownloadClient {
-  socket: Socket;
+  socket: _ClientSocket;
   queue: queueAsPromised<DownloadJob, CompletedDownloadJob>;
 
   downloadInfos: Map<string, DownloadInfo> = new Map();
 
-  constructor(socket: Socket, numThreads: number) {
+  constructor(socket: _ClientSocket, numThreads: number) {
     this.socket = socket;
     this.queue = fastq.promise(this, this.runDownloadJob, numThreads);
   }

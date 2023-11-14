@@ -25,6 +25,7 @@ import {
   DownloadJob
 } from "./download-schema.js";
 import { InfoPart } from "./info.js";
+import { _Server, _ServerSocket } from "./socket.js";
 import { listObjects } from "./storage.js";
 import { UploadJob } from "./upload-parts.js";
 
@@ -35,9 +36,9 @@ interface DownloadRequest extends InfoPart, DownloadFilePart {
 }
 
 export class DownloadServer {
-  io: Server;
+  io: _Server;
 
-  constructor(io: Server) {
+  constructor(io: _Server) {
     this.io = io;
 
     const loop = this.loop.bind(this);
@@ -45,7 +46,7 @@ export class DownloadServer {
     setTimeout(loop, 1000);
   }
 
-  listen(socket: Socket) {
+  listen(socket: _ServerSocket) {
     const { uploadServer, s3 } = this.io;
     socket.on(
       "download:complete",

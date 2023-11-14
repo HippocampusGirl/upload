@@ -8,14 +8,14 @@ import jwt from "jsonwebtoken";
 import { FileHandle, open } from "node:fs/promises";
 import { PassThrough } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { Socket } from "socket.io-client";
 
-import { requestOptions, retryCount } from "./config.js";
+import { requestOptions } from "./config.js";
 import { UploadCreateError } from "./errors.js";
 import { calculateChecksum } from "./fs.js";
 import { client } from "./http-client.js";
 import { parseRange } from "./part.js";
 import { makeClient } from "./socket-client.js";
+import { _ClientSocket } from "./socket.js";
 import {
   generateUploadRequests,
   RangeOptions,
@@ -39,7 +39,7 @@ export const makeUploadCommand = () => {
     .option(
       "--min-part-size <size>",
       "Minimum size of file parts for concurrent upload",
-      "5MB"
+      "16MB"
     )
     .option("--max-part-count <size>", "Maximum number of file parts", "10000")
     .option(
@@ -54,7 +54,10 @@ export const makeUploadCommand = () => {
       if (typeof endpoint !== "string") {
         throw new Error(`"endpoint" needs to be a string`);
       }
-      Joi.assert(endpoint, Joi.string().uri({ scheme: ["http", "https"] }));
+      Joi.assert(
+        endpoint,
+        Joi.string().uri({ scheme: ["http", "https", "ws", "wss"] })
+      );
 
       const token = options.token;
       if (typeof token !== "string") {
@@ -101,12 +104,12 @@ export const makeUploadCommand = () => {
 };
 
 class UploadClient {
-  socket: Socket;
+  socket: _ClientSocket;
   queue: queueAsPromised<UploadJob, CompletedUploadJob>;
 
   progress: Progress = new Progress();
 
-  constructor(socket: Socket, numThreads: number) {
+  constructor(socket: _ClientSocket, numThreads: number) {
     this.socket = socket;
     this.queue = fastq.promise(this, this.runUploadJob, numThreads);
   }
@@ -173,7 +176,7 @@ class UploadClient {
           await this.finalizeUploadJob(uploadJob);
           resolve(uploadJob);
         } catch (error) {
-          debug(error);
+          debug(error, retryStream.response);
         }
       };
       fn(writeStream);

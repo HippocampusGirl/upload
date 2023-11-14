@@ -7,17 +7,18 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { signedUrlOptions } from "./config.js";
 import { UploadCreateError } from "./errors.js";
 import { parseRange } from "./part.js";
+import { _Server, _ServerSocket } from "./socket.js";
 import { UploadInfo } from "./upload-info.js";
 import { makeSuffix, UploadJob, UploadRequest } from "./upload-parts.js";
 
 const debug = Debug("serve");
 
 export class UploadServer {
-  io: Server;
+  io: _Server;
 
   uploadInfos: Map<string, UploadInfo> = new Map();
 
-  constructor(io: Server) {
+  constructor(io: _Server) {
     this.io = io;
   }
 
@@ -32,8 +33,8 @@ export class UploadServer {
     return uploadInfo;
   }
 
-  listen(socket: Socket) {
-    const { s3, downloadServer } = this.io;
+  listen(socket: _ServerSocket) {
+    const { downloadServer } = this.io;
     const { bucket } = socket;
 
     const getUploadJob = async (
@@ -90,7 +91,7 @@ export class UploadServer {
       async (
         uploadJob: UploadJob,
         callback: (u: UploadCreateError | undefined) => void
-      ) => {
+      ): Promise<void> => {
         parseRange(uploadJob);
         const { path } = uploadJob;
         const uploadInfo = this.getUploadInfo(bucket, path);
@@ -111,7 +112,7 @@ export class UploadServer {
         path: string,
         checksumSHA256: string,
         callback: (u: UploadCreateError | undefined) => void
-      ) => {
+      ): Promise<void> => {
         const uploadInfo = this.getUploadInfo(bucket, path);
         try {
           await uploadInfo.setChecksumSHA256(checksumSHA256);
