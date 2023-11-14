@@ -176,7 +176,7 @@ class UploadClient {
           await this.finalizeUploadJob(uploadJob);
           resolve(uploadJob);
         } catch (error) {
-          debug(error, retryStream.response);
+          debug(error);
         }
       };
       fn(writeStream);
