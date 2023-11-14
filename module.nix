@@ -49,7 +49,6 @@ in {
       '';
       serviceConfig = {
         Restart = "on-failure";
-        Type = "oneshot";
 
         # Hardening based on https://github.com/fort-nix/nix-bitcoin/blob/master/pkgs/lib.nix
         CapabilityBoundingSet = "";
