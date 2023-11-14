@@ -8,6 +8,9 @@ on:
       # Any tag that looks like a version
       - "*.*.*"
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
