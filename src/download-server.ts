@@ -1,5 +1,4 @@
 import Debug from "debug";
-import { Server, Socket } from "socket.io";
 import { UploadInfo } from "upload-info.js";
 
 import {
@@ -146,7 +145,6 @@ export class DownloadServer {
     try {
       checksumJob = await uploadInfo.getChecksumJob();
     } catch (error) {
-      debug("could not submit checksum job: %O", error);
       return;
     }
     debug("sending checksum job", checksumJob);

@@ -20,7 +20,7 @@ import { touch } from "./fs.js";
 import { client } from "./http-client.js";
 import { parseRange } from "./part.js";
 import { Range } from "./range.js";
-import { makeClient } from "./socket-client.js";
+import { endpointSchema, makeClient } from "./socket-client.js";
 import { _ClientSocket } from "./socket.js";
 
 interface CompletedDownloadJob extends DownloadJob {
@@ -48,7 +48,7 @@ export const makeDownloadCommand = () => {
       if (typeof endpoint !== "string") {
         throw new Error(`"endpoint" needs to be a string`);
       }
-      Joi.assert(endpoint, Joi.string().uri({ scheme: ["http", "https"] }));
+      Joi.assert(endpoint, endpointSchema);
 
       const token = options.token;
       if (typeof token !== "string") {

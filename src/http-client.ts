@@ -1,9 +1,15 @@
 import Debug from "debug";
-import { RequestError, got } from "got";
+import { got, RequestError } from "got";
+
+import { getHttpsProxyAgent } from "./proxy.js";
 
 const debug = Debug("got");
 
+const agent = getHttpsProxyAgent();
 export const client = got.extend({
+  agent: {
+    https: agent,
+  },
   hooks: {
     beforeRequest: [
       (options) => {
