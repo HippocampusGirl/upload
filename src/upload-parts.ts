@@ -1,10 +1,12 @@
-import { calculateChecksum } from "fs.js";
-import { debug } from "node:console";
+import Debug from "debug";
 import { stat } from "node:fs/promises";
 
 import { delimiter } from "./config.js";
+import { calculateChecksum } from "./fs.js";
 import { FilePart, Job } from "./part.js";
 import { Range } from "./range.js";
+
+const debug = Debug("upload-client");
 
 export interface UploadRequest extends FilePart {}
 export interface UploadJob extends Job {}
@@ -15,31 +17,32 @@ export interface RangeOptions {
 }
 
 export async function* generateUploadRequests(
-  paths: string[],
+  path: string,
   { minPartSize, maxPartCount }: RangeOptions
 ): AsyncGenerator<UploadRequest, void, void> {
-  for (let path of paths) {
-    const stats = await stat(path);
-    const size = stats.size;
+  const stats = await stat(path);
+  const size = stats.size;
 
-    const partCount = Math.min(
-      maxPartCount,
-      Math.floor(Number(size) / Number(minPartSize))
-    );
-    const partSize = Math.ceil(Number(size) / partCount);
+  const partCount = Math.min(
+    maxPartCount,
+    Math.floor(Number(size) / Number(minPartSize))
+  );
+  const partSize = Math.ceil(Number(size) / partCount);
 
-    for (let i = 0; i < partCount; i++) {
-      const start = i * partSize;
-      let end = start + partSize;
+  for (let i = 0; i < partCount; i++) {
+    const start = i * partSize;
+    let end = start + partSize;
 
-      // Last part cannot go beyond the end of the file
-      end = (end > size ? size : end) - 1;
+    // Last part cannot go beyond the end of the file
+    end = (end > size ? size : end) - 1;
 
-      const range = new Range(start, end);
-      const checksumMD5 = await calculateChecksum(path, "md5", range);
+    const range = new Range(start, end);
 
-      yield { path, size, range, checksumMD5 };
-    }
+    debug("generating checksum for %o", { path, size, range });
+    const checksumMD5 = await calculateChecksum(path, "md5", range);
+    debug("generated upload request %o", { path, size, range, checksumMD5 });
+
+    yield { path, size, range, checksumMD5 };
   }
 }
 

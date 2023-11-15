@@ -11,10 +11,9 @@ import { pipeline } from "node:stream/promises";
 
 import { requestOptions } from "./config.js";
 import { UploadCreateError } from "./errors.js";
-import { calculateChecksum } from "./fs.js";
 import { client } from "./http-client.js";
 import { parseRange } from "./part.js";
-import { makeClient } from "./socket-client.js";
+import { endpointSchema, makeClient } from "./socket-client.js";
 import { _ClientSocket } from "./socket.js";
 import {
   generateUploadRequests,
@@ -23,6 +22,7 @@ import {
   UploadRequest
 } from "./upload-parts.js";
 import { Progress } from "./upload-progress.js";
+import { submitCalculateChecksum } from "./worker.js";
 
 interface CompletedUploadJob extends UploadJob {}
 
@@ -54,10 +54,7 @@ export const makeUploadCommand = () => {
       if (typeof endpoint !== "string") {
         throw new Error(`"endpoint" needs to be a string`);
       }
-      Joi.assert(
-        endpoint,
-        Joi.string().uri({ scheme: ["http", "https", "ws", "wss"] })
-      );
+      Joi.assert(endpoint, endpointSchema);
 
       const token = options.token;
       if (typeof token !== "string") {
@@ -194,13 +191,15 @@ class UploadClient {
   }
 
   async submitChecksum(path: string): Promise<void> {
-    const checksumSHA256 = await calculateChecksum(path, "sha256");
+    const checksumSHA256 = await submitCalculateChecksum(path, "sha256");
     await this.socket.emitWithAck("upload:checksum", path, checksumSHA256);
   }
 
   async submitPaths(paths: string[], options: RangeOptions): Promise<void> {
-    let uploadRequests: UploadRequest[] = new Array();
+    const createUploadJobsPromises: Promise<void>[] = new Array();
+    const jobPromises: Promise<any>[] = new Array();
 
+    let uploadRequests: UploadRequest[] = new Array();
     const createUploadJobs = async (
       uploadRequests: UploadRequest[]
     ): Promise<void> => {
@@ -237,26 +236,28 @@ class UploadClient {
           continue;
         }
         parseRange(result);
-        // debug(
-        //   "received partial upload for %s in range %s",
-        //   result.path,
-        //   result.range.toString()
-        // );
-        promises.push(this.queue.push(result));
+        jobPromises.push(this.queue.push(result));
         this.progress.addPart(result);
       }
     };
 
-    const promises: Promise<any>[] = [...paths.map(this.submitChecksum, this)];
-    for await (const uploadRequest of generateUploadRequests(paths, options)) {
-      uploadRequests.push(uploadRequest);
+    let start = Date.now();
+    for (const path of paths) {
+      jobPromises.push(this.submitChecksum(path));
+      for await (const uploadRequest of generateUploadRequests(path, options)) {
+        uploadRequests.push(uploadRequest);
 
-      if (uploadRequests.length > 100) {
-        await createUploadJobs(uploadRequests);
-        uploadRequests = new Array();
+        const elapsedMilliseconds = Date.now() - start;
+        if (uploadRequests.length > 100 || elapsedMilliseconds > 1000) {
+          createUploadJobsPromises.push(createUploadJobs(uploadRequests));
+          uploadRequests = new Array();
+          start = Date.now();
+        }
       }
     }
-    await createUploadJobs(uploadRequests);
-    await Promise.all(promises);
+    createUploadJobsPromises.push(createUploadJobs(uploadRequests));
+    await Promise.all(createUploadJobsPromises);
+
+    await Promise.all(jobPromises);
   }
 }
