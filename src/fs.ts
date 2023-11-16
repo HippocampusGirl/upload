@@ -10,6 +10,11 @@ import { pipeline } from "node:stream/promises";
 
 import { Range } from "./range.js";
 
+export interface ChecksumTask {
+  path: string;
+  range?: Range;
+  algorithm: string;
+}
 export const calculateChecksum = async (
   path: string,
   algorithm: string,

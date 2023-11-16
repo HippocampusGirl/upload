@@ -26,6 +26,7 @@
     "format-duration": "^3.0.2",
     "gauge": "^5.0.1",
     "got": "^13.0.0",
+    "https-proxy-agent": "^7.0.2",
     "joi": "^17.11.0",
     "jsonwebtoken": "^9.0.2",
     "memoizee": "^0.4.15",

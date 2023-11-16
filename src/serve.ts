@@ -57,7 +57,7 @@ export const makeServeCommand = () => {
 
 export const serve = (port: number, publicKey: string) => {
   // Set up socket.io
-  const io: _Server = new Server(port);
+  const io: _Server = new Server(port, { pingInterval: 1000 });
   io.s3 = makeS3Client();
 
   // Handle authorization

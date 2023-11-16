@@ -22,7 +22,7 @@ import {
   UploadRequest
 } from "./upload-parts.js";
 import { Progress } from "./upload-progress.js";
-import { submitCalculateChecksum } from "./worker.js";
+import { WorkerPool } from "./worker.js";
 
 interface CompletedUploadJob extends UploadJob {}
 
@@ -103,6 +103,8 @@ export const makeUploadCommand = () => {
 class UploadClient {
   socket: _ClientSocket;
   queue: queueAsPromised<UploadJob, CompletedUploadJob>;
+
+  workerPool: WorkerPool = new WorkerPool();
 
   progress: Progress = new Progress();
 
@@ -191,7 +193,10 @@ class UploadClient {
   }
 
   async submitChecksum(path: string): Promise<void> {
-    const checksumSHA256 = await submitCalculateChecksum(path, "sha256");
+    const checksumSHA256 = await this.workerPool.submitCalculateChecksum(
+      path,
+      "sha256"
+    );
     await this.socket.emitWithAck("upload:checksum", path, checksumSHA256);
   }
 
@@ -244,7 +249,11 @@ class UploadClient {
     let start = Date.now();
     for (const path of paths) {
       jobPromises.push(this.submitChecksum(path));
-      for await (const uploadRequest of generateUploadRequests(path, options)) {
+      for await (const uploadRequest of generateUploadRequests(
+        path,
+        this.workerPool,
+        options
+      )) {
         uploadRequests.push(uploadRequest);
 
         const elapsedMilliseconds = Date.now() - start;

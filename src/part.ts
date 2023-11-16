@@ -19,7 +19,7 @@ export const partSchema = Joi.object().keys({
   range: rangeSchema.required(),
   checksumMD5: Joi.string().required(),
 });
-export const parseRange = (value: { range: any }) => {
+export const parseRange = (value: { range?: any }) => {
   const { start, end } = value.range;
   value.range = new Range(start, end);
 };

@@ -2,9 +2,9 @@ import Debug from "debug";
 import { stat } from "node:fs/promises";
 
 import { delimiter } from "./config.js";
-import { calculateChecksum } from "./fs.js";
 import { FilePart, Job } from "./part.js";
 import { Range } from "./range.js";
+import { WorkerPool } from "./worker.js";
 
 const debug = Debug("upload-client");
 
@@ -18,6 +18,7 @@ export interface RangeOptions {
 
 export async function* generateUploadRequests(
   path: string,
+  workerPool: WorkerPool,
   { minPartSize, maxPartCount }: RangeOptions
 ): AsyncGenerator<UploadRequest, void, void> {
   const stats = await stat(path);
@@ -37,9 +38,11 @@ export async function* generateUploadRequests(
     end = (end > size ? size : end) - 1;
 
     const range = new Range(start, end);
-
-    debug("generating checksum for %o", { path, size, range });
-    const checksumMD5 = await calculateChecksum(path, "md5", range);
+    const checksumMD5 = await workerPool.submitCalculateChecksum(
+      path,
+      "md5",
+      range
+    );
     debug("generated upload request %o", { path, size, range, checksumMD5 });
 
     yield { path, size, range, checksumMD5 };
