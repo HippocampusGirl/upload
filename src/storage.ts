@@ -93,6 +93,7 @@ export async function* listObjects(
   if (buckets === undefined) {
     return;
   }
+  debug("listing %o buckets", buckets.length);
   for (const bucket of buckets) {
     for await (const object of listObjectsInBucket(s3, bucket)) {
       yield { ...object, Bucket: bucket };

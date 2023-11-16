@@ -20,7 +20,9 @@ if (isMainThread) {
       if (that.opts().debug) {
         Debug.enable("*");
       } else {
-        Debug.enable("upload-client,download-client,socket-client,serve");
+        Debug.enable(
+          "upload-client,download-client,socket-client,serve,storage"
+        );
       }
     });
 

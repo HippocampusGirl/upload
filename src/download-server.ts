@@ -41,7 +41,6 @@ export class DownloadServer {
     this.io = io;
 
     const loop = this.loop.bind(this);
-    setInterval(loop, 60 * 1000);
     setTimeout(loop, 1000);
   }
 
@@ -80,10 +79,12 @@ export class DownloadServer {
   }
 
   async loop() {
+    debug("loop");
+
     const io = this.io;
     const { s3, uploadServer } = io;
 
-    const downloadJobs: DownloadJob[] = new Array();
+    let downloadJobs: DownloadJob[] = new Array();
     for await (const object of listObjects(s3)) {
       try {
         if (object.Bucket === undefined) {
@@ -100,21 +101,24 @@ export class DownloadServer {
         }
 
         const path = getPathFromPathname(object.Key);
+        // debug("found path %o", path);
         const uploadInfo = uploadServer.getUploadInfo(object.Bucket, path);
         if (await uploadInfo.isVerified()) {
           continue;
         }
         if (object.Key.endsWith(UploadInfo.suffix)) {
-          this.submitChecksumJob(uploadInfo);
+          await this.submitChecksumJob(uploadInfo);
           continue;
         }
 
+        // debug("found download %o", path);
         let range;
         try {
           range = getRangeFromPathname(object.Key);
         } catch (error) {
           continue;
         }
+        // debug("found range %o for %o", range, path);
         if (range.size() !== object.Size) {
           throw new Error(
             "Mismatched size between object and range in file name: " +
@@ -126,21 +130,35 @@ export class DownloadServer {
           checksumMD5: object.ETag,
         });
 
-        this.createDownloadJob({
-          ...part,
-          name: getNameFromBucket(object.Bucket),
-          path,
-          size: await uploadInfo.getSize(),
-          input: {
-            Bucket: object.Bucket,
-            Key: object.Key,
-          },
-        });
+        downloadJobs.push(
+          await this.createDownloadJob({
+            ...part,
+            name: getNameFromBucket(object.Bucket),
+            path,
+            size: await uploadInfo.getSize(),
+            input: {
+              Bucket: object.Bucket,
+              Key: object.Key,
+            },
+          })
+        );
       } catch (error) {
         debug("could not parse object %o: %O", object, error);
       }
-    }
 
+      if (downloadJobs.length > 1000) {
+        this.sendDownloadJobs(downloadJobs);
+        downloadJobs = new Array();
+      }
+    }
+    this.sendDownloadJobs(downloadJobs);
+
+    const loop = this.loop.bind(this);
+    setTimeout(loop, 60 * 1000);
+  }
+
+  private sendDownloadJobs(downloadJobs: DownloadJob[]): void {
+    const io = this.io;
     debug("sending %o download jobs", downloadJobs.length);
     io.to("download").emit("download:create", downloadJobs);
   }
@@ -201,6 +219,7 @@ export class DownloadServer {
       checksumMD5,
       size,
     };
+    // debug("created download job %o", downloadJob);
     return downloadJob;
   }
 }
