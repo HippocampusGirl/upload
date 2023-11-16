@@ -24,7 +24,7 @@ export interface ClientToServerEvents {
 }
 
 export interface ServerToClientEvents {
-  "download:create": (downloadJob: DownloadJob) => void;
+  "download:create": (downloadJobs: DownloadJob[]) => void;
   "download:checksum": (checksumJob: ChecksumJob) => void;
 }
 

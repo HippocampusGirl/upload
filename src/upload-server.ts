@@ -102,7 +102,6 @@ export class UploadServer {
           callback({ error: "unknown" });
           return;
         }
-        await downloadServer.submitDownloadJob(uploadJob);
         callback(undefined);
       }
     );

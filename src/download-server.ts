@@ -80,7 +80,10 @@ export class DownloadServer {
   }
 
   async loop() {
-    const { s3, uploadServer } = this.io;
+    const io = this.io;
+    const { s3, uploadServer } = io;
+
+    const downloadJobs: DownloadJob[] = new Array();
     for await (const object of listObjects(s3)) {
       try {
         if (object.Bucket === undefined) {
@@ -123,7 +126,7 @@ export class DownloadServer {
           checksumMD5: object.ETag,
         });
 
-        this.submitDownloadJob({
+        this.createDownloadJob({
           ...part,
           name: getNameFromBucket(object.Bucket),
           path,
@@ -137,6 +140,9 @@ export class DownloadServer {
         debug("could not parse object %o: %O", object, error);
       }
     }
+
+    debug("sending %o download jobs", downloadJobs.length);
+    io.to("download").emit("download:create", downloadJobs);
   }
 
   async submitChecksumJob(uploadInfo: UploadInfo): Promise<void> {
@@ -150,7 +156,9 @@ export class DownloadServer {
     debug("sending checksum job", checksumJob);
     io.to("download").emit("download:checksum", checksumJob);
   }
-  async submitDownloadJob(u: UploadJob | DownloadRequest): Promise<void> {
+  async createDownloadJob(
+    u: UploadJob | DownloadRequest
+  ): Promise<DownloadJob> {
     const io = this.io;
     const { range, path, checksumMD5, size } = u;
 
@@ -193,7 +201,6 @@ export class DownloadServer {
       checksumMD5,
       size,
     };
-    debug("sending download job", downloadJob);
-    io.to("download").emit("download:create", downloadJob);
+    return downloadJob;
   }
 }

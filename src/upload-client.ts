@@ -246,7 +246,6 @@ class UploadClient {
       }
     };
 
-    let start = Date.now();
     for (const path of paths) {
       jobPromises.push(this.submitChecksum(path));
       for await (const uploadRequest of generateUploadRequests(
@@ -256,11 +255,9 @@ class UploadClient {
       )) {
         uploadRequests.push(uploadRequest);
 
-        const elapsedMilliseconds = Date.now() - start;
-        if (uploadRequests.length > 100 || elapsedMilliseconds > 1000) {
+        if (uploadRequests.length > 1000) {
           createUploadJobsPromises.push(createUploadJobs(uploadRequests));
           uploadRequests = new Array();
-          start = Date.now();
         }
       }
     }

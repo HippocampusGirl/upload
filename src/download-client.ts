@@ -112,31 +112,33 @@ class DownloadClient {
   }
 
   listen() {
-    this.socket.on("download:create", async (downloadJob: DownloadJob) => {
-      try {
-        parseRange(downloadJob);
-        debug(
-          "received partial download for %s in range %s",
-          downloadJob.path,
-          downloadJob.range.toString()
-        );
-
-        const path = makePath(downloadJob);
-        const downloadInfo = this.getDownloadInfo(path);
-        const run = await downloadInfo.addDownloadJob(downloadJob);
-        if (!run) {
+    this.socket.on("download:create", async (downloadJobs: DownloadJob[]) => {
+      for (const downloadJob of downloadJobs) {
+        try {
+          parseRange(downloadJob);
           debug(
-            "skipping download job for %s in range %s because it already exists",
+            "received partial download for %s in range %s",
             downloadJob.path,
             downloadJob.range.toString()
           );
-          await this.socket.emitWithAck("download:complete", downloadJob);
-          return;
-        }
 
-        await this.queue.push(downloadJob);
-      } catch (error) {
-        debug("failed to process download job: %o", error);
+          const path = makePath(downloadJob);
+          const downloadInfo = this.getDownloadInfo(path);
+          const run = await downloadInfo.addDownloadJob(downloadJob);
+          if (!run) {
+            debug(
+              "skipping download job for %s in range %s because it already exists",
+              downloadJob.path,
+              downloadJob.range.toString()
+            );
+            await this.socket.emitWithAck("download:complete", downloadJob);
+            return;
+          }
+
+          await this.queue.push(downloadJob);
+        } catch (error) {
+          debug("failed to process download job: %o", error);
+        }
       }
     });
     this.socket.on("download:checksum", async (checksumJob: ChecksumJob) => {
