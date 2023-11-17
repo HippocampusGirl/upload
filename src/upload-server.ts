@@ -73,7 +73,6 @@ export class UploadServer {
         url,
       };
 
-      debug("sending upload job %o", uploadJob);
       return uploadJob;
     };
     socket.on(
@@ -82,7 +81,9 @@ export class UploadServer {
         uploadRequests: UploadRequest[],
         callback: (u: (UploadJob | UploadCreateError)[]) => void
       ) => {
-        callback(await Promise.all(uploadRequests.map(getUploadJob)));
+        const uploadJobs = await Promise.all(uploadRequests.map(getUploadJob));
+        debug("sending %o upload jobs", uploadJobs.length);
+        callback(uploadJobs);
       }
     );
 

@@ -200,8 +200,7 @@ class UploadClient {
   }
 
   async submitPaths(paths: string[], options: RangeOptions): Promise<void> {
-    const createUploadJobsPromises: Promise<void>[] = new Array();
-    const jobPromises: Promise<any>[] = new Array();
+    const promises: Promise<any>[] = new Array();
 
     let uploadRequests: UploadRequest[] = new Array();
     const createUploadJobs = async (
@@ -240,29 +239,33 @@ class UploadClient {
           continue;
         }
         parseRange(result);
-        jobPromises.push(this.queue.push(result));
+        promises.push(this.queue.push(result));
         this.progress.addPart(result);
       }
     };
 
-    for (const path of paths) {
-      jobPromises.push(this.submitChecksum(path));
-      for await (const uploadRequest of generateUploadRequests(
-        path,
-        this.workerPool,
-        options
-      )) {
-        uploadRequests.push(uploadRequest);
+    promises.push(
+      ...paths.map(async (path): Promise<void> => {
+        const promises: Promise<void>[] = new Array();
 
-        if (uploadRequests.length > 1000) {
-          createUploadJobsPromises.push(createUploadJobs(uploadRequests));
-          uploadRequests = new Array();
+        for await (const uploadRequest of generateUploadRequests(
+          path,
+          this.workerPool,
+          options
+        )) {
+          uploadRequests.push(uploadRequest);
+
+          if (uploadRequests.length > 1000) {
+            promises.push(createUploadJobs(uploadRequests));
+            uploadRequests = new Array();
+          }
         }
-      }
-    }
-    createUploadJobsPromises.push(createUploadJobs(uploadRequests));
-    await Promise.all(createUploadJobsPromises);
+        promises.push(createUploadJobs(uploadRequests));
+        promises.push(this.submitChecksum(path));
+        await Promise.all(promises);
+      })
+    );
 
-    await Promise.all(jobPromises);
+    await Promise.all(promises);
   }
 }
