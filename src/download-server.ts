@@ -154,7 +154,7 @@ export class DownloadServer {
     this.sendDownloadJobs(downloadJobs);
 
     const loop = this.loop.bind(this);
-    setTimeout(loop, 60 * 1000);
+    setTimeout(loop, 10 * 60 * 1000); // 10 minutes
   }
 
   private sendDownloadJobs(downloadJobs: DownloadJob[]): void {
