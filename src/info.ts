@@ -1,7 +1,7 @@
 import fastq, { queueAsPromised } from "fastq";
 import Joi from "joi";
 
-import { FilePart, parseRange, Part, partSchema } from "./part.js";
+import { FilePart, parseRange, Part, partSchema } from "./part.ts";
 
 export interface InfoPart extends Part {
   complete: boolean;

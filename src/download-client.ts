@@ -9,19 +9,19 @@ import { FileHandle, open } from "node:fs/promises";
 import { pipeline } from "node:stream/promises";
 import { join } from "path";
 
-import { DownloadInfo } from "./download-info.js";
+import { DownloadInfo } from "./download-info.ts";
 import {
   ChecksumJob,
   DownloadFilePart,
   DownloadJob
-} from "./download-schema.js";
-import { touch } from "./fs.js";
-import { client, requestOptions } from "./http-client.js";
-import { parseRange } from "./part.js";
-import { Progress } from "./progress.js";
-import { Range } from "./range.js";
-import { endpointSchema, makeClient } from "./socket-client.js";
-import { _ClientSocket } from "./socket.js";
+} from "./download-schema.ts";
+import { touch } from "./fs.ts";
+import { client, requestOptions } from "./http-client.ts";
+import { parseRange } from "./part.ts";
+import { Progress } from "./progress.ts";
+import { Range } from "./range.ts";
+import { endpointSchema, makeClient } from "./socket-client.ts";
+import { _ClientSocket } from "./socket.ts";
 
 interface CompletedDownloadJob extends DownloadJob {
   size: number;

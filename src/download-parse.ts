@@ -1,10 +1,10 @@
 import { GetObjectCommandInput } from "@aws-sdk/client-s3";
 
-import { delimiter } from "./config.js";
-import { nameSchema } from "./payload.js";
-import { Range } from "./range.js";
-import { prefix } from "./storage.js";
-import { validate } from "./validate.js";
+import { delimiter } from "./config.ts";
+import { nameSchema } from "./payload.ts";
+import { Range } from "./range.ts";
+import { prefix } from "./storage.ts";
+import { validate } from "./validate.ts";
 
 export const getBucketNameFromURL = (url: string): string => {
   let { hostname } = new URL(url);

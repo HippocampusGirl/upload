@@ -1,4 +1,4 @@
-import { File, FilePart, Job } from "./part.js";
+import { File, FilePart, Job } from "./part.ts";
 
 interface DownloadBase {
   name: string;

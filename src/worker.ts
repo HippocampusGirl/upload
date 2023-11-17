@@ -4,9 +4,9 @@ import { execFileSync } from "node:child_process";
 import EventEmitter from "node:events";
 import { isMainThread, parentPort, Worker } from "node:worker_threads";
 
-import { calculateChecksum } from "./fs.js";
-import { parseRange } from "./part.js";
-import { Range } from "./range.js";
+import { calculateChecksum } from "./fs.ts";
+import { parseRange } from "./part.ts";
+import { Range } from "./range.ts";
 
 const debug = Debug("upload-client");
 

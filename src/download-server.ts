@@ -1,5 +1,5 @@
 import Debug from "debug";
-import { UploadInfo } from "upload-info.js";
+import { UploadInfo } from "upload-info.ts";
 
 import {
   DeleteObjectCommand,
@@ -8,7 +8,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-import { signedUrlOptions } from "./config.js";
+import { signedUrlOptions } from "./config.ts";
 import {
   getInputFromURL,
   getNameFromBucket,
@@ -17,16 +17,16 @@ import {
   getPathFromURL,
   getRangeFromPathname,
   getRangeFromURL
-} from "./download-parse.js";
+} from "./download-parse.ts";
 import {
   ChecksumJob,
   DownloadFilePart,
   DownloadJob
-} from "./download-schema.js";
-import { InfoPart } from "./info.js";
-import { _Server, _ServerSocket } from "./socket.js";
-import { listObjects } from "./storage.js";
-import { UploadJob } from "./upload-parts.js";
+} from "./download-schema.ts";
+import { InfoPart } from "./info.ts";
+import { _Server, _ServerSocket } from "./socket.ts";
+import { listObjects } from "./storage.ts";
+import { UploadJob } from "./upload-parts.ts";
 
 const debug = Debug("serve");
 

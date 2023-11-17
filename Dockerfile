@@ -1,11 +1,10 @@
-FROM node
+FROM oven/bun:latest as builder
 
-RUN --mount=target=/upload \
-    cp -r /upload /tmp \
-    && cd /tmp/upload \
-    && npm run build \
-    && install --mode=555 --target-directory=/usr/local/bin upload.cjs \
-    && cd /tmp \
-    && rm -rf *
+COPY . .
+RUN bun install --production --no-cache
+RUN bun build src/index.ts --compile --minify --outfile="/upload"
 
-ENTRYPOINT ["/usr/local/bin/upload.cjs"]
+FROM gcr.io/distroless/base:nonroot
+COPY --from=builder --chown=nonroot:nonroot /upload .
+
+ENTRYPOINT ["./upload"]

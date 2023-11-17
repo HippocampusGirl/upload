@@ -7,5 +7,6 @@
     "importSorter.importStringConfiguration.quoteMark": "double",
     "files.exclude": {
         "upload.cjs": true,
+        "upload.mjs": true,
     }
 }

@@ -5,19 +5,18 @@
   "main": "src/index.ts",
   "type": "module",
   "bin": {
-    "upload": "./upload.cjs"
+    "upload": "upload"
   },
   "scripts": {
-    "build": "node build.mjs",
-    "start": "npm run build && node upload.cjs",
-    "serve": "concurrently --kill-others './build.mjs watch' 'nodemon --quiet node upload.cjs serve --port 13481 --public-key-file public.pem'"
+    "build": "bun build src/index.ts --compile --outfile=\"upload\"",
+    "start": "npm run build && ./upload",
+    "serve": "bun --watch src/index.ts serve --port 13481 --public-key-file public.pem"
   },
   "author": "Lea Waller <lea@lea.science>",
   "license": "GPL-3.0-or-later",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.440.0",
     "@aws-sdk/s3-request-presigner": "^3.440.0",
-    "@socket.io/admin-ui": "^0.5.1",
     "bytes": "^3.1.2",
     "commander": "^11.1.0",
     "debug": "^4.3.4",
@@ -29,7 +28,6 @@
     "https-proxy-agent": "^7.0.2",
     "joi": "^17.11.0",
     "jsonwebtoken": "^9.0.2",
-    "memoizee": "^0.4.15",
     "socket.io": "^4.7.2",
     "socket.io-client": "^4.7.2"
   },
@@ -40,8 +38,8 @@
     "@types/gauge": "^5.0.3",
     "@types/got": "^9.6.12",
     "@types/jsonwebtoken": "^9.0.4",
-    "@types/memoizee": "^0.4.10",
     "@types/node": "^20.8.10",
+    "bun-types": "^1.0.12",
     "concurrently": "^8.2.2",
     "esbuild": "0.19.5",
     "nodemon": "^3.0.1",

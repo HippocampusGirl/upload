@@ -2,11 +2,11 @@ import { Command } from "commander";
 import Debug from "debug";
 import { isMainThread } from "node:worker_threads";
 
-import { makeCreateTokenCommand } from "./create-token.js";
-import { makeDownloadCommand } from "./download-client.js";
-import { makeServeCommand } from "./serve.js";
-import { makeUploadCommand } from "./upload-client.js";
-import { worker } from "./worker.js";
+import { makeCreateTokenCommand } from "./create-token.ts";
+import { makeDownloadCommand } from "./download-client.ts";
+import { makeServeCommand } from "./serve.ts";
+import { makeUploadCommand } from "./upload-client.ts";
+import { worker } from "./worker.ts";
 
 if (isMainThread) {
   const command = new Command();

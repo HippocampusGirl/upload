@@ -6,12 +6,12 @@ import { Server, Socket } from "socket.io";
 
 import { S3Client } from "@aws-sdk/client-s3";
 
-import { DownloadServer } from "./download-server.js";
-import { UnauthorizedError } from "./errors.js";
-import { Payload } from "./payload.js";
-import { _Server } from "./socket.js";
-import { makeS3Client, requireBucketName } from "./storage.js";
-import { UploadServer } from "./upload-server.js";
+import { DownloadServer } from "./download-server.ts";
+import { UnauthorizedError } from "./errors.ts";
+import { Payload } from "./payload.ts";
+import { _Server } from "./socket.ts";
+import { makeS3Client, requireBucketName } from "./storage.ts";
+import { UploadServer } from "./upload-server.ts";
 
 // Allow socket to store payload
 declare module "socket.io" {

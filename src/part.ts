@@ -1,6 +1,6 @@
 import Joi from "joi";
 
-import { Range, rangeSchema } from "./range.js";
+import { Range, rangeSchema } from "./range.ts";
 
 export interface Part {
   range: Range;

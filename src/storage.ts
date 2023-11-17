@@ -12,8 +12,8 @@ import {
   S3Client
 } from "@aws-sdk/client-s3";
 
-import { getS3Config } from "./config.js";
-import { CloudflareBucketLocationConstraint } from "./payload.js";
+import { getS3Config } from "./config.ts";
+import { CloudflareBucketLocationConstraint } from "./payload.ts";
 
 const debug = Debug("storage");
 

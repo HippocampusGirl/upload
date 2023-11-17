@@ -4,12 +4,12 @@ import { Server, Socket } from "socket.io";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-import { signedUrlOptions } from "./config.js";
-import { UploadCreateError } from "./errors.js";
-import { parseRange } from "./part.js";
-import { _Server, _ServerSocket } from "./socket.js";
-import { UploadInfo } from "./upload-info.js";
-import { makeSuffix, UploadJob, UploadRequest } from "./upload-parts.js";
+import { signedUrlOptions } from "./config.ts";
+import { UploadCreateError } from "./errors.ts";
+import { parseRange } from "./part.ts";
+import { _Server, _ServerSocket } from "./socket.ts";
+import { UploadInfo } from "./upload-info.ts";
+import { makeSuffix, UploadJob, UploadRequest } from "./upload-parts.ts";
 
 const debug = Debug("serve");
 

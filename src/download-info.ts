@@ -1,9 +1,9 @@
 import Debug from "debug";
-import { DownloadJob } from "download-schema.js";
+import { DownloadJob } from "download-schema.ts";
 import Joi from "joi";
 import { open } from "node:fs/promises";
 
-import { calculateChecksum, touch } from "./fs.js";
+import { calculateChecksum, touch } from "./fs.ts";
 import {
   CompletePartJob,
   Info,
@@ -11,9 +11,9 @@ import {
   InfoJob,
   InfoPart,
   SetChecksumSHA256Job
-} from "./info.js";
-import { Part } from "./part.js";
-import { Range, reduceRanges } from "./range.js";
+} from "./info.ts";
+import { Part } from "./part.ts";
+import { Range, reduceRanges } from "./range.ts";
 
 const debug = Debug("download-client");
 

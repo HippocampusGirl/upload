@@ -9,19 +9,19 @@ import { FileHandle, open } from "node:fs/promises";
 import { PassThrough } from "node:stream";
 import { pipeline } from "node:stream/promises";
 
-import { UploadCreateError } from "./errors.js";
-import { client, requestOptions } from "./http-client.js";
-import { parseRange } from "./part.js";
-import { Progress } from "./progress.js";
-import { endpointSchema, makeClient } from "./socket-client.js";
-import { _ClientSocket } from "./socket.js";
+import { UploadCreateError } from "./errors.ts";
+import { client, requestOptions } from "./http-client.ts";
+import { parseRange } from "./part.ts";
+import { Progress } from "./progress.ts";
+import { endpointSchema, makeClient } from "./socket-client.ts";
+import { _ClientSocket } from "./socket.ts";
 import {
   generateUploadRequests,
   RangeOptions,
   UploadJob,
   UploadRequest
-} from "./upload-parts.js";
-import { WorkerPool } from "./worker.js";
+} from "./upload-parts.ts";
+import { WorkerPool } from "./worker.ts";
 
 interface CompletedUploadJob extends UploadJob {}
 

@@ -19,6 +19,7 @@
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
             awscli
+            bun
             nodejs_21
             nodePackages.pnpm
             nodePackages.typescript

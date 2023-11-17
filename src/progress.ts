@@ -2,7 +2,7 @@ import { format } from "bytes";
 import formatDuration from "format-duration";
 import Gauge from "gauge";
 
-import { Part } from "./part.js";
+import { Part } from "./part.ts";
 
 export class Progress {
   public readonly gauge: Gauge = new Gauge();

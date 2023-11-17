@@ -8,7 +8,7 @@ import {
 import { parse } from "node:path";
 import { pipeline } from "node:stream/promises";
 
-import { Range } from "./range.js";
+import { Range } from "./range.ts";
 
 export interface ChecksumTask {
   path: string;

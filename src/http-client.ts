@@ -1,7 +1,7 @@
 import Debug from "debug";
 import { got, RequestError } from "got";
 
-import { getHttpsProxyAgent } from "./proxy.js";
+import { getHttpsProxyAgent } from "./proxy.ts";
 
 const debug = Debug("got");
 

@@ -1,6 +1,6 @@
 import Joi from "joi";
 
-import { ValidationError } from "./errors.js";
+import { ValidationError } from "./errors.ts";
 
 export const validate = (schema: Joi.Schema, value: any): any => {
   const { error, value: validated } = schema.validate(value);

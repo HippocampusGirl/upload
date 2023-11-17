@@ -8,9 +8,9 @@ import {
   S3Client
 } from "@aws-sdk/client-s3";
 
-import { delimiter } from "./config.js";
-import { getNameFromBucket } from "./download-parse.js";
-import { ChecksumJob } from "./download-schema.js";
+import { delimiter } from "./config.ts";
+import { getNameFromBucket } from "./download-parse.ts";
+import { ChecksumJob } from "./download-schema.ts";
 import {
   CompletePartJob,
   Info,
@@ -18,9 +18,9 @@ import {
   InfoJob,
   InfoPart,
   SetChecksumSHA256Job
-} from "./info.js";
-import { Part } from "./part.js";
-import { UploadRequest } from "./upload-parts.js";
+} from "./info.ts";
+import { Part } from "./part.ts";
+import { UploadRequest } from "./upload-parts.ts";
 
 const debug = Debug("serve");
 

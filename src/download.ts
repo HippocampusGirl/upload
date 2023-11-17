@@ -4,15 +4,15 @@
 //   ListBucketsCommand,
 //   GetObjectCommand,
 // } from "@aws-sdk/client-s3";
-// import { signedUrlOptions, unpack } from "./base.js";
+// import { signedUrlOptions, unpack } from "./base.ts";
 // import { Joi, Segments, celebrate } from "celebrate";
-// import { AuthenticationError } from "./errors.js";
+// import { AuthenticationError } from "./errors.ts";
 // import { NextFunction, Request, Response, Router } from "express";
 // import { JwtPayload } from "jsonwebtoken";
-// import { listObjects, s3 } from "./storage.js";
+// import { listObjects, s3 } from "./storage.ts";
 // import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-// import { fileSchema, tokenSchema } from "./schema.js";
-// import { httpServer } from "./index.js";
+// import { fileSchema, tokenSchema } from "./schema.ts";
+// import { httpServer } from "./index.ts";
 // import WebSocket from "ws";
 // import { Server } from "socket.io";
 
