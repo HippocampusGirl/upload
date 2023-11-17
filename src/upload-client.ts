@@ -9,10 +9,10 @@ import { FileHandle, open } from "node:fs/promises";
 import { PassThrough } from "node:stream";
 import { pipeline } from "node:stream/promises";
 
-import { requestOptions } from "./config.js";
 import { UploadCreateError } from "./errors.js";
-import { client } from "./http-client.js";
+import { client, requestOptions } from "./http-client.js";
 import { parseRange } from "./part.js";
+import { Progress } from "./progress.js";
 import { endpointSchema, makeClient } from "./socket-client.js";
 import { _ClientSocket } from "./socket.js";
 import {
@@ -21,7 +21,6 @@ import {
   UploadJob,
   UploadRequest
 } from "./upload-parts.js";
-import { Progress } from "./upload-progress.js";
 import { WorkerPool } from "./worker.js";
 
 interface CompletedUploadJob extends UploadJob {}

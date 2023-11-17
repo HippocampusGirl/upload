@@ -9,7 +9,6 @@ import { FileHandle, open } from "node:fs/promises";
 import { pipeline } from "node:stream/promises";
 import { join } from "path";
 
-import { requestOptions } from "./config.js";
 import { DownloadInfo } from "./download-info.js";
 import {
   ChecksumJob,
@@ -17,8 +16,9 @@ import {
   DownloadJob
 } from "./download-schema.js";
 import { touch } from "./fs.js";
-import { client } from "./http-client.js";
+import { client, requestOptions } from "./http-client.js";
 import { parseRange } from "./part.js";
+import { Progress } from "./progress.js";
 import { Range } from "./range.js";
 import { endpointSchema, makeClient } from "./socket-client.js";
 import { _ClientSocket } from "./socket.js";
@@ -82,6 +82,7 @@ export const makeDownloadCommand = () => {
         await signal;
       } finally {
         socket.disconnect();
+        client.queue.kill();
       }
     });
   return command;
@@ -93,9 +94,12 @@ const makePath = (job: DownloadFilePart | ChecksumJob): string => {
 
 class DownloadClient {
   socket: _ClientSocket;
-  queue: queueAsPromised<DownloadJob, CompletedDownloadJob>;
+  queue: queueAsPromised<DownloadJob, void>;
+
+  progress: Progress = new Progress();
 
   downloadInfos: Map<string, DownloadInfo> = new Map();
+  downloads: Set<string> = new Set();
 
   constructor(socket: _ClientSocket, numThreads: number) {
     this.socket = socket;
@@ -113,33 +117,37 @@ class DownloadClient {
 
   listen() {
     this.socket.on("download:create", async (downloadJobs: DownloadJob[]) => {
+      const promises: Promise<void>[] = [];
       for (const downloadJob of downloadJobs) {
         try {
           parseRange(downloadJob);
-          debug(
-            "received partial download for %s in range %s",
-            downloadJob.path,
-            downloadJob.range.toString()
-          );
 
           const path = makePath(downloadJob);
           const downloadInfo = this.getDownloadInfo(path);
           const run = await downloadInfo.addDownloadJob(downloadJob);
           if (!run) {
-            debug(
-              "skipping download job for %s in range %s because it already exists",
-              downloadJob.path,
-              downloadJob.range.toString()
-            );
+            // debug(
+            //   "not adding download job for %s in range %s because it already exists",
+            //   downloadJob.path,
+            //   downloadJob.range.toString()
+            // );
             await this.socket.emitWithAck("download:complete", downloadJob);
-            return;
+            continue;
           }
 
-          await this.queue.push(downloadJob);
+          const key = `${downloadJob.path}:${downloadJob.range.toString()}`;
+          if (this.downloads.has(key)) {
+            continue;
+          }
+          this.downloads.add(key);
+
+          this.progress.addPart(downloadJob);
+          promises.push(this.queue.push(downloadJob));
         } catch (error) {
           debug("failed to process download job: %o", error);
         }
       }
+      await Promise.all(promises);
     });
     this.socket.on("download:checksum", async (checksumJob: ChecksumJob) => {
       try {
@@ -158,6 +166,7 @@ class DownloadClient {
     readStream: Request,
     downloadJob: DownloadJob
   ): Promise<CompletedDownloadJob> {
+    const { progress } = this;
     const { start, end } = downloadJob.range;
     const path = makePath(downloadJob);
     await touch(path);
@@ -172,7 +181,11 @@ class DownloadClient {
         async function* (source: AsyncIterable<Buffer>) {
           for await (const chunk of source) {
             md5.update(chunk);
+
             size += chunk.length;
+
+            progress.gauge.pulse();
+
             yield chunk;
           }
         },
@@ -214,6 +227,8 @@ class DownloadClient {
   }
 
   async finalizeDownloadJob(downloadJob: CompletedDownloadJob): Promise<void> {
+    this.progress.completePart(downloadJob);
+
     const { range } = downloadJob;
     debug(
       "completed partial download for %s in range %s",
@@ -232,9 +247,12 @@ class DownloadClient {
     }
   }
 
-  async runDownloadJob(
-    downloadJob: DownloadJob
-  ): Promise<CompletedDownloadJob> {
+  async runDownloadJob(downloadJob: DownloadJob): Promise<void> {
+    // debug(
+    //   "running partial download for %s in range %s",
+    //   downloadJob.path,
+    //   downloadJob.range.toString()
+    // );
     const { url } = downloadJob;
     const readStream: Request = client.stream.get(url, { ...requestOptions });
     return new Promise((resolve, reject) => {
@@ -251,7 +269,7 @@ class DownloadClient {
             downloadJob
           );
           await this.finalizeDownloadJob(completedDownloadJob);
-          resolve(completedDownloadJob);
+          resolve();
         } catch (error) {
           debug(error);
         }

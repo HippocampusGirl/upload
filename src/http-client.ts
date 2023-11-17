@@ -29,3 +29,9 @@ export const client = got.extend({
     ],
   },
 });
+export const retryCount = 100;
+export const requestOptions = {
+  retry: {
+    limit: retryCount,
+  },
+};
