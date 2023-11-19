@@ -18,7 +18,7 @@ export const getS3Config = () => {
   return { endpoint, accessKeyId, secretAccessKey };
 };
 
-export const signedUrlOptions = { expiresIn: 60 * 60 };
+export const signedUrlOptions = { expiresIn: 7 * 24 * 60 * 60 };
 export const keyRegExp = /^[a-z][a-z0-9-_/\.]+[a-z0-9]$/;
 export const delimiter = "/";
 
