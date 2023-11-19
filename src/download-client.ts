@@ -254,7 +254,15 @@ class DownloadClient {
     //   downloadJob.range.toString()
     // );
     const { url } = downloadJob;
-    const readStream: Request = client.stream.get(url, { ...requestOptions });
+
+    let readStream: Request;
+    try {
+      readStream = client.stream.get(url, { ...requestOptions });
+    } catch (error) {
+      debug(error);
+      return;
+    }
+
     return new Promise((resolve, reject) => {
       const fn = async (retryStream: Request) => {
         try {
