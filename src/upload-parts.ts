@@ -30,6 +30,7 @@ export async function* generateUploadRequests(
   );
   const partSize = Math.ceil(Number(size) / partCount);
 
+  debug("generating %o upload requests for  %o", partCount, path);
   for (let i = 0; i < partCount; i++) {
     const start = i * partSize;
     let end = start + partSize;
@@ -43,7 +44,6 @@ export async function* generateUploadRequests(
       "md5",
       range
     );
-    debug("generated upload request %o", { path, size, range, checksumMD5 });
 
     yield { path, size, range, checksumMD5 };
   }
