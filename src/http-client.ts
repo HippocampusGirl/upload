@@ -1,5 +1,5 @@
 import Debug from "debug";
-import { got, RequestError } from "got";
+import { got, OptionsInit, RequestError } from "got";
 
 import { getHttpsProxyAgent } from "./proxy.js";
 
@@ -29,9 +29,25 @@ export const client = got.extend({
     ],
   },
 });
+
+interface Options extends OptionsInit {
+  isStream?: true;
+}
+
 export const retryCount = 100;
-export const requestOptions = {
+export const timeout = 10 * 1000; // 10 seconds
+export const requestTimeout = 3600 * 1000; // 1 hour
+export const requestOptions: Options = {
   retry: {
     limit: retryCount,
+  },
+  timeout: {
+    lookup: timeout,
+    connect: timeout,
+    secureConnect: timeout,
+    socket: timeout,
+    response: timeout,
+    send: timeout,
+    request: requestTimeout,
   },
 };
