@@ -2,8 +2,8 @@ import Debug from "debug";
 import Joi from "joi";
 import { io, ManagerOptions, SocketOptions } from "socket.io-client";
 
-import { getHttpsProxyAgent } from "./proxy.js";
 import { _ClientSocket } from "./socket.js";
+import { getHttpsProxyAgent } from "./utils/proxy.js";
 
 const debug = Debug("socket-client");
 

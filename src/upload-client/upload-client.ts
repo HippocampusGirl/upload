@@ -9,28 +9,28 @@ import { FileHandle, open } from "node:fs/promises";
 import { PassThrough } from "node:stream";
 import { pipeline } from "node:stream/promises";
 
-import { UploadCreateError } from "./errors.js";
-import { client, requestOptions } from "./http-client.js";
-import { parseRange } from "./part.js";
-import { Progress } from "./progress.js";
-import { endpointSchema, makeClient } from "./socket-client.js";
-import { _ClientSocket } from "./socket.js";
+import { parseRange } from "../part.js";
+import { endpointSchema, makeClient } from "../socket-client.js";
+import { _ClientSocket } from "../socket.js";
 import {
   generateUploadRequests,
   RangeOptions,
   UploadJob,
   UploadRequest
-} from "./upload-parts.js";
+} from "../upload-parts.js";
+import { UploadCreateError } from "../utils/errors.js";
+import { client, requestOptions } from "../utils/http-client.js";
+import { Progress } from "../utils/progress.js";
 import { WorkerPool } from "./worker.js";
 
 interface CompletedUploadJob extends UploadJob {}
 
 const debug = Debug("upload-client");
 
-export const makeUploadCommand = () => {
+export const makeUploadClientCommand = () => {
   const command = new Command();
   command
-    .name(`upload`)
+    .name(`upload-client`)
     .showHelpAfterError()
     .requiredOption("--endpoint <value>", "Where the server is located")
     .requiredOption("--token <value>", "Token to authenticate with the server")

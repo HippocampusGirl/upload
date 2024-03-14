@@ -1,12 +1,12 @@
 import Debug from "debug";
 import { AsyncResource } from "node:async_hooks";
-import { execFileSync } from "node:child_process";
 import EventEmitter from "node:events";
-import { isMainThread, parentPort, Worker } from "node:worker_threads";
+import { availableParallelism } from "node:os";
+import { parentPort, Worker } from "node:worker_threads";
 
-import { calculateChecksum } from "./fs.js";
-import { parseRange } from "./part.js";
-import { Range } from "./range.js";
+import { parseRange } from "../part.js";
+import { calculateChecksum } from "../utils/fs.js";
+import { Range } from "../utils/range.js";
 
 const debug = Debug("upload-client");
 
@@ -54,11 +54,7 @@ export class WorkerPool extends EventEmitter {
   constructor() {
     super();
 
-    const stdout = execFileSync("nproc", { encoding: "utf-8" });
-    const numThreads = 4 * parseInt(stdout, 10);
-    if (Number.isNaN(numThreads)) {
-      throw new Error(`Invalid number of threads: ${stdout}`);
-    }
+    const numThreads = 4 * availableParallelism();
     debug(`Will use ${numThreads} threads for checksum calculation`);
     for (let i = 0; i < numThreads; i++) {
       this.addNewWorker();

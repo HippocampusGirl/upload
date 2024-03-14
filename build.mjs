@@ -2,6 +2,7 @@
 
 import { Command } from "commander";
 import * as esbuild from "esbuild";
+import esbuildPluginTsc from "esbuild-plugin-tsc";
 
 let nodeExecutable = process.argv[0];
 if (nodeExecutable.includes("nix")) {
@@ -18,11 +19,13 @@ const context = await esbuild.context({
   target: "node20",
   format: "cjs",
   bundle: true,
+  treeShaking: true,
   write: true,
   outfile: "upload.cjs",
   banner: {
     js: `#!${nodeExecutable}`,
   },
+  plugins: [esbuildPluginTsc({ force: true })],
 });
 
 const rebuildCommand = new Command();

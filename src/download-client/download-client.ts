@@ -9,19 +9,19 @@ import { FileHandle, open } from "node:fs/promises";
 import { pipeline } from "node:stream/promises";
 import { join } from "path";
 
-import { DownloadInfo } from "./download-info.js";
+import { addFilePart, completePart, setChecksumSHA256 } from "../controller.js";
 import {
   ChecksumJob,
   DownloadFilePart,
   DownloadJob
-} from "./download-schema.js";
-import { touch } from "./fs.js";
-import { client, requestOptions } from "./http-client.js";
-import { parseRange } from "./part.js";
-import { Progress } from "./progress.js";
-import { Range } from "./range.js";
-import { endpointSchema, makeClient } from "./socket-client.js";
-import { _ClientSocket } from "./socket.js";
+} from "../download-schema.js";
+import { parseRange } from "../part.js";
+import { endpointSchema, makeClient } from "../socket-client.js";
+import { _ClientSocket } from "../socket.js";
+import { touch } from "../utils/fs.js";
+import { client, requestOptions } from "../utils/http-client.js";
+import { Progress } from "../utils/progress.js";
+import { Range } from "../utils/range.js";
 
 interface CompletedDownloadJob extends DownloadJob {
   size: number;
@@ -29,10 +29,10 @@ interface CompletedDownloadJob extends DownloadJob {
 
 const debug = Debug("download-client");
 
-export const makeDownloadCommand = () => {
+export const makeDownloadClientCommand = () => {
   const command = new Command();
   command
-    .name(`download`)
+    .name(`download-client`)
     .showHelpAfterError()
     .requiredOption("--endpoint <value>", "Where the server is located")
     .requiredOption("--token <value>", "Token to authenticate with the server")
@@ -89,30 +89,18 @@ export const makeDownloadCommand = () => {
 };
 
 const makePath = (job: DownloadFilePart | ChecksumJob): string => {
-  return join(job.name, job.path);
+  return join(job.bucket, job.path);
 };
 
 class DownloadClient {
   socket: _ClientSocket;
   queue: queueAsPromised<DownloadJob, void>;
-
   progress: Progress = new Progress();
-
-  downloadInfos: Map<string, DownloadInfo> = new Map();
   downloads: Set<string> = new Set();
 
   constructor(socket: _ClientSocket, numThreads: number) {
     this.socket = socket;
     this.queue = fastq.promise(this, this.runDownloadJob, numThreads);
-  }
-
-  getDownloadInfo(path: string): DownloadInfo {
-    let downloadInfo = this.downloadInfos.get(path);
-    if (downloadInfo === undefined) {
-      downloadInfo = new DownloadInfo(path);
-      this.downloadInfos.set(path, downloadInfo);
-    }
-    return downloadInfo;
   }
 
   listen() {
@@ -122,9 +110,7 @@ class DownloadClient {
         try {
           parseRange(downloadJob);
 
-          const path = makePath(downloadJob);
-          const downloadInfo = this.getDownloadInfo(path);
-          const run = await downloadInfo.addDownloadJob(downloadJob);
+          const run = await addFilePart(downloadJob.bucket, downloadJob);
           if (!run) {
             // debug(
             //   "not adding download job for %s in range %s because it already exists",
@@ -151,11 +137,10 @@ class DownloadClient {
     });
     this.socket.on("download:checksum", async (checksumJob: ChecksumJob) => {
       try {
-        const { checksumSHA256 } = checksumJob;
+        const { bucket, checksumSHA256 } = checksumJob;
 
         const path = makePath(checksumJob);
-        const downloadInfo = this.getDownloadInfo(path);
-        await downloadInfo.setChecksumSHA256(checksumSHA256);
+        await setChecksumSHA256(bucket, path, checksumSHA256);
       } catch (error) {
         debug("failed to process checksum job: %o", error);
       }
@@ -236,9 +221,7 @@ class DownloadClient {
       range.toString()
     );
 
-    const path = makePath(downloadJob);
-    const downloadInfo = this.getDownloadInfo(path);
-    const verified = await downloadInfo.completePart(downloadJob);
+    const verified = await completePart(downloadJob.bucket, downloadJob);
 
     await this.socket.emitWithAck("download:complete", downloadJob);
 

@@ -14,7 +14,7 @@ results
 tmp
 
 # Build
-public/css/main.css
+upload.cjs
 
 # Coverage reports
 coverage
@@ -42,3 +42,6 @@ yarn.lock
 
 # ignore direnv
 .direnv
+
+# Cryptographic keys
+*.pem

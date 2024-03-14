@@ -1,16 +1,21 @@
 import { Command } from "commander";
 import Debug from "debug";
 import jwt from "jsonwebtoken";
+import cluster from "node:cluster";
 import { readFileSync } from "node:fs";
+import { createServer } from "node:http";
+import { availableParallelism } from "node:os";
 import { Server, Socket } from "socket.io";
 
 import { S3Client } from "@aws-sdk/client-s3";
+import { createAdapter, setupPrimary } from "@socket.io/cluster-adapter";
+import sticky from "@socket.io/sticky";
 
+import { _Server } from "../socket.js";
+import { UnauthorizedError } from "../utils/errors.js";
+import { Payload } from "../utils/payload.js";
+import { makeS3Client, requireBucketName } from "../utils/storage.js";
 import { DownloadServer } from "./download-server.js";
-import { UnauthorizedError } from "./errors.js";
-import { Payload } from "./payload.js";
-import { _Server } from "./socket.js";
-import { makeS3Client, requireBucketName } from "./storage.js";
 import { UploadServer } from "./upload-server.js";
 
 // Allow socket to store payload
@@ -24,15 +29,12 @@ interface ExtendedSocket {
 }
 interface ExtendedServer {
   s3: S3Client;
-
-  uploadServer: UploadServer;
-  downloadServer: DownloadServer;
 }
 
 const debug = Debug("serve");
 
 export const makeServeCommand = () => {
-  const command = new Command("serve");
+  const command = new Command(`serve`);
   command
     .requiredOption("--port <number>", "Port to listen on")
     .requiredOption(
@@ -56,8 +58,46 @@ export const makeServeCommand = () => {
 };
 
 export const serve = (port: number, publicKey: string) => {
+  // Exit on unhandled error
+  process.on("unhandledRejection", (error) => {
+    console.error(error);
+    process.exit(1);
+  });
+
+  const httpServer = createServer();
+  if (cluster.isPrimary) {
+    debug(`start primary ${process.pid}`);
+
+    sticky.setupMaster(httpServer, {
+      loadBalancingMethod: "least-connection",
+    });
+    setupPrimary();
+    cluster.setupPrimary({
+      serialization: "advanced",
+    });
+
+    const numThreads = availableParallelism();
+    for (let i = 0; i < numThreads; i++) {
+      cluster.fork();
+    }
+    cluster.on("exit", (worker) => {
+      debug(`exit process ${worker.process.pid}`);
+      cluster.fork();
+    });
+
+    httpServer.listen(port);
+    return;
+  }
+
+  debug(`start worker ${process.pid}`);
+
+  const io: _Server = new Server(httpServer);
+  // Cluster adapter
+  io.adapter(createAdapter());
+  // Connection with the primary process
+  sticky.setupWorker(io);
+
   // Set up socket.io
-  const io: _Server = new Server(port);
   io.s3 = makeS3Client();
 
   // Handle authorization
@@ -92,16 +132,17 @@ export const serve = (port: number, publicKey: string) => {
     return next();
   });
 
-  io.uploadServer = new UploadServer(io);
-  io.downloadServer = new DownloadServer(io);
-  io.on("connection", (socket: Socket) => {
-    io.uploadServer.listen(socket);
-    io.downloadServer.listen(socket);
-  });
+  const downloadServer: DownloadServer = new DownloadServer(io);
+  const uploadServer: UploadServer = new UploadServer(io);
 
-  // Exit on unhandled error
-  process.on("unhandledRejection", (error) => {
-    console.error(error);
-    process.exit(1);
+  io.on("connection", (socket: Socket) => {
+    switch (socket.payload.type) {
+      case "download":
+        downloadServer.listen(socket);
+        break;
+      case "upload":
+        uploadServer.listen(socket);
+        break;
+    }
   });
 };

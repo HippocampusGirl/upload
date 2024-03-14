@@ -12,7 +12,7 @@ import {
   S3Client
 } from "@aws-sdk/client-s3";
 
-import { getS3Config } from "./config.js";
+import { getS3Config } from "../config.js";
 import { CloudflareBucketLocationConstraint } from "./payload.js";
 
 const debug = Debug("storage");
@@ -76,7 +76,7 @@ export async function* listObjectsInBucket(
   } while (isTruncated);
 }
 
-interface _BucketObject extends _Object {
+export interface _BucketObject extends _Object {
   Bucket: string;
 }
 

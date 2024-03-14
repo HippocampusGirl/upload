@@ -3,8 +3,8 @@ import { stat } from "node:fs/promises";
 
 import { delimiter } from "./config.js";
 import { FilePart, Job } from "./part.js";
-import { Range } from "./range.js";
-import { WorkerPool } from "./worker.js";
+import { WorkerPool } from "./upload-client/worker.js";
+import { Range } from "./utils/range.js";
 
 const debug = Debug("upload-client");
 

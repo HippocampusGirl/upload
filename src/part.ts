@@ -1,16 +1,16 @@
 import Joi from "joi";
 
-import { Range, rangeSchema } from "./range.js";
+import { Range, rangeSchema } from "./utils/range.js";
 
-export interface Part {
+export interface _Part {
   range: Range;
   checksumMD5: string;
 }
-export interface File {
+export interface _File {
   path: string;
   size: number;
 }
-export interface FilePart extends Part, File {}
+export interface FilePart extends _Part, _File {}
 export interface Job extends FilePart {
   url: string;
 }

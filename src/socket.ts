@@ -2,8 +2,8 @@ import { Server, Socket as ServerSocket } from "socket.io";
 import { Socket as ClientSocket } from "socket.io-client";
 
 import { ChecksumJob, DownloadJob } from "./download-schema.js";
-import { UploadCreateError } from "./errors.js";
 import { UploadJob, UploadRequest } from "./upload-parts.js";
+import { UploadCreateError } from "./utils/errors.js";
 
 export interface ClientToServerEvents {
   "download:complete": (downloadJob: DownloadJob, callback: () => void) => void;

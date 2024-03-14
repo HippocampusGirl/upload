@@ -2,7 +2,7 @@ import { format } from "bytes";
 import formatDuration from "format-duration";
 import Gauge from "gauge";
 
-import { Part } from "./part.js";
+import { _Part } from "../part.js";
 
 export class Progress {
   public readonly gauge: Gauge = new Gauge();
@@ -12,7 +12,7 @@ export class Progress {
 
   constructor() {}
 
-  addPart(part: Part): void {
+  addPart(part: _Part): void {
     this.total += part.range.size();
     this.update();
     // total += uploadJobs.flat().reduce((accumulator, uploadJob) => {
@@ -26,7 +26,7 @@ export class Progress {
     // eta = makeEta({ min: 0, max: total, historyTimeConstant: 30 });
   }
 
-  completePart(part: Part): void {
+  completePart(part: _Part): void {
     this.bytes += part.range.size();
     this.update();
   }

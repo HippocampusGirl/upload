@@ -1,12 +1,14 @@
+import "reflect-metadata";
+
 import { Command } from "commander";
 import Debug from "debug";
 import { isMainThread } from "node:worker_threads";
 
 import { makeCreateTokenCommand } from "./create-token.js";
-import { makeDownloadCommand } from "./download-client.js";
-import { makeServeCommand } from "./serve.js";
-import { makeUploadCommand } from "./upload-client.js";
-import { worker } from "./worker.js";
+import { makeDownloadClientCommand } from "./download-client/download-client.js";
+import { makeServeCommand } from "./server/serve.js";
+import { makeUploadClientCommand } from "./upload-client/upload-client.js";
+import { worker } from "./upload-client/worker.js";
 
 if (isMainThread) {
   const command = new Command();
@@ -14,9 +16,9 @@ if (isMainThread) {
     .option("--debug", "Output extra debug information")
     .addCommand(makeCreateTokenCommand())
     .addCommand(makeServeCommand())
-    .addCommand(makeUploadCommand())
-    .addCommand(makeDownloadCommand())
-    .hook("preAction", (that, actionCommand) => {
+    .addCommand(makeUploadClientCommand())
+    .addCommand(makeDownloadClientCommand())
+    .hook("preAction", (that) => {
       if (that.opts().debug) {
         Debug.enable("*");
       } else {
