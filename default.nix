@@ -5,7 +5,7 @@ pkgs.buildNpmPackage {
 
   nativeBuildInputs = with pkgs; [ python3 ];
 
-  npmDepsHash = "sha256-5n2Yp3y1SzuFIqrfCViTGpc8T7hOfpxHlbc+glZcUB0=";
+  npmDepsHash = "sha256-U6HGFC+bK8YHRPZ20PSAP4tDGEkgDQzrqx2vbZTqCAc=";
 
   installPhase = ''
     runHook preInstall
