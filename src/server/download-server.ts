@@ -4,7 +4,6 @@ import { DeleteObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 import { signedUrlOptions } from "../config.js";
-import { getPart, setVerified } from "../controller.js";
 import {
   getInputFromURL,
   getPathFromURL,
@@ -33,7 +32,7 @@ export class DownloadServer {
   listen(socket: _ServerSocket) {
     this.hasClient = true;
 
-    const { s3, dataSource } = this.io;
+    const { s3, controller } = this.io;
     socket.on(
       "download:complete",
       async (downloadJob: DownloadJob, callback: () => void) => {
@@ -59,7 +58,7 @@ export class DownloadServer {
           );
         }
 
-        await setVerified(input.Bucket, path, dataSource);
+        await controller.setVerified(input.Bucket, path);
         callback();
       }
     );
@@ -73,7 +72,7 @@ export class DownloadServer {
 
     if (this.hasClient) {
       const io = this.io;
-      const { s3, dataSource } = io;
+      const { s3, controller } = io;
 
       const createDownloadJob = async (
         object: _BucketObject,
@@ -141,7 +140,7 @@ export class DownloadServer {
           }
 
           const checksumMD5 = object.ETag;
-          const part = await getPart(checksumMD5, range, dataSource);
+          const part = await controller.getPart(checksumMD5, range);
           if (part === null) {
             debug("deleting unknown file %o", object.Key);
             await deleteObject(object);

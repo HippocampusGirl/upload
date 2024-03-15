@@ -55,7 +55,7 @@ export class WorkerPool extends EventEmitter {
     super();
 
     const numThreads = 4 * availableParallelism();
-    debug(`Will use ${numThreads} threads for checksum calculation`);
+    debug(`will use ${numThreads} threads for checksum calculation`);
     for (let i = 0; i < numThreads; i++) {
       this.addNewWorker();
     }

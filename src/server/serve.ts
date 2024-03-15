@@ -1,5 +1,4 @@
 import { Command, Option } from "commander";
-import { getDataSource } from "data-source.js";
 import Debug from "debug";
 import jwt from "jsonwebtoken";
 import cluster from "node:cluster";
@@ -13,6 +12,8 @@ import { S3Client } from "@aws-sdk/client-s3";
 import { createAdapter, setupPrimary } from "@socket.io/cluster-adapter";
 import sticky from "@socket.io/sticky";
 
+import { Controller } from "../controller.js";
+import { getDataSource } from "../data-source.js";
 import { _Server } from "../socket.js";
 import { UnauthorizedError } from "../utils/errors.js";
 import { Payload } from "../utils/payload.js";
@@ -31,7 +32,7 @@ interface ExtendedSocket {
 }
 interface ExtendedServer {
   s3: S3Client;
-  dataSource: DataSource;
+  controller: Controller;
 }
 
 const debug = Debug("serve");
@@ -49,11 +50,9 @@ export const makeServeCommand = () => {
         .choices(["sqlite", "postgres"])
         .default("sqlite")
     )
-    .addOption(
-      new Option(
-        "--database-path <path>",
-        "Path of the database to connect to"
-      ).default("server.sqlite")
+    .requiredOption(
+      "--connection-string <path>",
+      "Connection string to the database"
     )
     .addOption(
       new Option(
@@ -75,10 +74,11 @@ export const makeServeCommand = () => {
       const publicKey = readFileSync(publicKeyFile, "utf8");
       const dataSource = await getDataSource(
         options.databaseType,
-        options.databasePath,
+        options.connectionString,
         options.verbose
       );
-      serve(port, publicKey, dataSource, parseInt(options.numThreads, 10));
+      const controller = new Controller(dataSource);
+      serve(port, publicKey, controller, parseInt(options.numThreads, 10));
     });
   return command;
 };
@@ -86,7 +86,7 @@ export const makeServeCommand = () => {
 export const serve = (
   port: number,
   publicKey: string,
-  dataSource: DataSource,
+  controller: Controller,
   numThreads: number
 ) => {
   // Exit on unhandled error
@@ -129,7 +129,7 @@ export const serve = (
 
   // Set up socket.io
   io.s3 = makeS3Client();
-  io.dataSource = dataSource;
+  io.controller = controller;
 
   // Handle authorization
   // based on socketio-jwt/src/authorize.ts

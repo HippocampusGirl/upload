@@ -4,7 +4,7 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 import { signedUrlOptions } from "../config.js";
-import { addFilePart, completePart, setChecksumSHA256 } from "../controller.js";
+import { Controller } from "../controller.js";
 import { parseRange } from "../part.js";
 import { _Server, _ServerSocket } from "../socket.js";
 import {
@@ -24,7 +24,7 @@ export class UploadServer {
   }
 
   listen(socket: _ServerSocket) {
-    const { s3, dataSource } = this.io;
+    const { s3, controller } = this.io;
     const { bucket } = socket;
 
     const getUploadJob = async (
@@ -36,7 +36,7 @@ export class UploadServer {
       // Check if already exists
       let success;
       try {
-        success = await addFilePart(bucket, uploadRequest, dataSource);
+        success = await controller.addFilePart(bucket, uploadRequest);
       } catch (error) {
         debug(error);
         return { error: "unknown" };
@@ -84,7 +84,7 @@ export class UploadServer {
       ): Promise<void> => {
         parseRange(uploadJob);
         try {
-          await completePart(bucket, uploadJob, dataSource);
+          await controller.completePart(bucket, uploadJob);
         } catch (error) {
           debug(error);
           callback({ error: "unknown" });
@@ -101,7 +101,7 @@ export class UploadServer {
         callback: (u: UploadCreateError | undefined) => void
       ): Promise<void> => {
         try {
-          await setChecksumSHA256(bucket, path, checksumSHA256, dataSource);
+          await controller.setChecksumSHA256(bucket, path, checksumSHA256);
         } catch (error) {
           debug(error);
           callback({ error: "unknown" });

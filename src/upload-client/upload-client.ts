@@ -199,7 +199,7 @@ class UploadClient {
     await this.socket.emitWithAck("upload:checksum", path, checksumSHA256);
   }
 
-  async submitPaths(paths: string[], options: RangeOptions): Promise<void> {
+  async submitPaths(paths: string[], options: RangeOptions): Promise<any> {
     const promises: Promise<any>[] = new Array();
 
     let uploadRequests: UploadRequest[] = new Array();
@@ -268,6 +268,6 @@ class UploadClient {
     );
 
     debug("submitting %o jobs", promises.length);
-    await Promise.all(promises);
+    return Promise.all(promises);
   }
 }

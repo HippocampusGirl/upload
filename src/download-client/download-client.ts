@@ -10,7 +10,7 @@ import { pipeline } from "node:stream/promises";
 import { join } from "path";
 import { DataSource } from "typeorm";
 
-import { addFilePart, completePart, setChecksumSHA256 } from "../controller.js";
+import { Controller } from "../controller.js";
 import { getDataSource } from "../data-source.js";
 import {
   ChecksumJob,
@@ -48,11 +48,9 @@ export const makeDownloadClientCommand = () => {
         .choices(["sqlite", "postgres"])
         .default("sqlite")
     )
-    .addOption(
-      new Option(
-        "--database-path <path>",
-        "Path of the database to connect to"
-      ).default("server.sqlite")
+    .requiredOption(
+      "--connection-string <path>",
+      "Connection string to the database"
     )
     .action(async () => {
       const options = command.opts();
@@ -90,9 +88,10 @@ export const makeDownloadClientCommand = () => {
       const socket = makeClient(endpoint, token);
       const dataSource = await getDataSource(
         options.databaseType,
-        options.databasePath
+        options.connectionString
       );
-      const client = new DownloadClient(socket, numThreads, dataSource);
+      const controller = new Controller(dataSource);
+      const client = new DownloadClient(socket, numThreads, controller);
 
       try {
         client.listen();
@@ -114,16 +113,16 @@ class DownloadClient {
   queue: queueAsPromised<DownloadJob, void>;
   progress: Progress = new Progress();
   downloads: Set<string> = new Set();
-  dataSource: DataSource;
+  controller: Controller;
 
   constructor(
     socket: _ClientSocket,
     numThreads: number,
-    dataSource: DataSource
+    controller: Controller
   ) {
     this.socket = socket;
     this.queue = fastq.promise(this, this.runDownloadJob, numThreads);
-    this.dataSource = dataSource;
+    this.controller = controller;
   }
 
   listen() {
@@ -133,10 +132,9 @@ class DownloadClient {
         try {
           parseRange(downloadJob);
 
-          const run = await addFilePart(
+          const run = await this.controller.addFilePart(
             downloadJob.bucket,
-            downloadJob,
-            this.dataSource
+            downloadJob
           );
           if (!run) {
             // debug(
@@ -167,7 +165,7 @@ class DownloadClient {
         const { bucket, checksumSHA256 } = checksumJob;
 
         const path = makePath(checksumJob);
-        await setChecksumSHA256(bucket, path, checksumSHA256, this.dataSource);
+        await this.controller.setChecksumSHA256(bucket, path, checksumSHA256);
       } catch (error) {
         debug("failed to process checksum job: %o", error);
       }
@@ -248,10 +246,9 @@ class DownloadClient {
       range.toString()
     );
 
-    const verified = await completePart(
+    const verified = await this.controller.completePart(
       downloadJob.bucket,
-      downloadJob,
-      this.dataSource
+      downloadJob
     );
 
     await this.socket.emitWithAck("download:complete", downloadJob);
