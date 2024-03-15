@@ -1,4 +1,5 @@
-import { Command } from "commander";
+import { Command, Option } from "commander";
+import { getDataSource } from "data-source.js";
 import Debug from "debug";
 import jwt from "jsonwebtoken";
 import cluster from "node:cluster";
@@ -6,6 +7,7 @@ import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { availableParallelism } from "node:os";
 import { Server, Socket } from "socket.io";
+import { DataSource } from "typeorm";
 
 import { S3Client } from "@aws-sdk/client-s3";
 import { createAdapter, setupPrimary } from "@socket.io/cluster-adapter";
@@ -29,6 +31,7 @@ interface ExtendedSocket {
 }
 interface ExtendedServer {
   s3: S3Client;
+  dataSource: DataSource;
 }
 
 const debug = Debug("serve");
@@ -41,7 +44,25 @@ export const makeServeCommand = () => {
       "--public-key-file <path>",
       "Path to the public key file generated with `openssl ec -in key.pem -pubout`"
     )
-    .action(() => {
+    .addOption(
+      new Option("--database-type <type>", "Which type of database to use")
+        .choices(["sqlite", "postgres"])
+        .default("sqlite")
+    )
+    .addOption(
+      new Option(
+        "--database-path <path>",
+        "Path of the database to connect to"
+      ).default("server.sqlite")
+    )
+    .addOption(
+      new Option(
+        "--num-threads <number>",
+        "Number of concurrent upload threads"
+      ).default(availableParallelism())
+    )
+    .option("--verbose", "Output extra debug information")
+    .action(async () => {
       const options = command.opts();
       const port: number = parseInt(options.port, 10);
       if (Number.isNaN(port)) {
@@ -52,12 +73,22 @@ export const makeServeCommand = () => {
         throw new Error("publicKeyFile must be a string");
       }
       const publicKey = readFileSync(publicKeyFile, "utf8");
-      serve(port, publicKey);
+      const dataSource = await getDataSource(
+        options.databaseType,
+        options.databasePath,
+        options.verbose
+      );
+      serve(port, publicKey, dataSource, parseInt(options.numThreads, 10));
     });
   return command;
 };
 
-export const serve = (port: number, publicKey: string) => {
+export const serve = (
+  port: number,
+  publicKey: string,
+  dataSource: DataSource,
+  numThreads: number
+) => {
   // Exit on unhandled error
   process.on("unhandledRejection", (error) => {
     console.error(error);
@@ -76,7 +107,6 @@ export const serve = (port: number, publicKey: string) => {
       serialization: "advanced",
     });
 
-    const numThreads = availableParallelism();
     for (let i = 0; i < numThreads; i++) {
       cluster.fork();
     }
@@ -99,6 +129,7 @@ export const serve = (port: number, publicKey: string) => {
 
   // Set up socket.io
   io.s3 = makeS3Client();
+  io.dataSource = dataSource;
 
   // Handle authorization
   // based on socketio-jwt/src/authorize.ts

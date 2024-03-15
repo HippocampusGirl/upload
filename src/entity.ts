@@ -4,15 +4,15 @@ import { Range } from "./utils/range.js";
 
 @Entity()
 export class Part {
-  @PrimaryColumn()
+  @PrimaryColumn("varchar")
   checksumMD5: string;
 
-  @Column()
+  @Column("int")
   start: number;
-  @Column()
+  @Column("int")
   end: number;
 
-  @Column({ default: false })
+  @Column({ type: "boolean", default: false })
   complete: boolean;
 
   @ManyToOne(() => File, (file) => file.parts)
@@ -38,13 +38,13 @@ export class File {
   @PrimaryColumn()
   path: string;
 
-  @Column({ nullable: true, default: null })
+  @Column({ type: "int", nullable: true, default: null })
   size: number | null;
 
-  @Column({ nullable: true, default: null })
+  @Column({ type: "varchar", nullable: true, default: null })
   checksumSHA256: string | null;
 
-  @Column({ default: false })
+  @Column({ type: "boolean", default: false })
   verified: boolean;
 
   @OneToMany(() => Part, (part) => part.file)

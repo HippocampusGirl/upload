@@ -1,4 +1,4 @@
-import { Command } from "commander";
+import { Command, Option } from "commander";
 import Debug from "debug";
 import fastq, { queueAsPromised } from "fastq";
 import { Request } from "got";
@@ -8,8 +8,10 @@ import { createHash } from "node:crypto";
 import { FileHandle, open } from "node:fs/promises";
 import { pipeline } from "node:stream/promises";
 import { join } from "path";
+import { DataSource } from "typeorm";
 
 import { addFilePart, completePart, setChecksumSHA256 } from "../controller.js";
+import { getDataSource } from "../data-source.js";
 import {
   ChecksumJob,
   DownloadFilePart,
@@ -40,6 +42,17 @@ export const makeDownloadClientCommand = () => {
       "--num-threads <count>",
       "Number of concurrent upload threads",
       "20"
+    )
+    .addOption(
+      new Option("--database-type <type>", "Which type of database to use")
+        .choices(["sqlite", "postgres"])
+        .default("sqlite")
+    )
+    .addOption(
+      new Option(
+        "--database-path <path>",
+        "Path of the database to connect to"
+      ).default("server.sqlite")
     )
     .action(async () => {
       const options = command.opts();
@@ -75,7 +88,11 @@ export const makeDownloadClientCommand = () => {
       });
 
       const socket = makeClient(endpoint, token);
-      const client = new DownloadClient(socket, numThreads);
+      const dataSource = await getDataSource(
+        options.databaseType,
+        options.databasePath
+      );
+      const client = new DownloadClient(socket, numThreads, dataSource);
 
       try {
         client.listen();
@@ -97,10 +114,16 @@ class DownloadClient {
   queue: queueAsPromised<DownloadJob, void>;
   progress: Progress = new Progress();
   downloads: Set<string> = new Set();
+  dataSource: DataSource;
 
-  constructor(socket: _ClientSocket, numThreads: number) {
+  constructor(
+    socket: _ClientSocket,
+    numThreads: number,
+    dataSource: DataSource
+  ) {
     this.socket = socket;
     this.queue = fastq.promise(this, this.runDownloadJob, numThreads);
+    this.dataSource = dataSource;
   }
 
   listen() {
@@ -110,7 +133,11 @@ class DownloadClient {
         try {
           parseRange(downloadJob);
 
-          const run = await addFilePart(downloadJob.bucket, downloadJob);
+          const run = await addFilePart(
+            downloadJob.bucket,
+            downloadJob,
+            this.dataSource
+          );
           if (!run) {
             // debug(
             //   "not adding download job for %s in range %s because it already exists",
@@ -140,7 +167,7 @@ class DownloadClient {
         const { bucket, checksumSHA256 } = checksumJob;
 
         const path = makePath(checksumJob);
-        await setChecksumSHA256(bucket, path, checksumSHA256);
+        await setChecksumSHA256(bucket, path, checksumSHA256, this.dataSource);
       } catch (error) {
         debug("failed to process checksum job: %o", error);
       }
@@ -221,7 +248,11 @@ class DownloadClient {
       range.toString()
     );
 
-    const verified = await completePart(downloadJob.bucket, downloadJob);
+    const verified = await completePart(
+      downloadJob.bucket,
+      downloadJob,
+      this.dataSource
+    );
 
     await this.socket.emitWithAck("download:complete", downloadJob);
 

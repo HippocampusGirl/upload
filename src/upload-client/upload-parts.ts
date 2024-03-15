@@ -1,10 +1,10 @@
 import Debug from "debug";
 import { stat } from "node:fs/promises";
 
-import { delimiter } from "./config.js";
-import { FilePart, Job } from "./part.js";
-import { WorkerPool } from "./upload-client/worker.js";
-import { Range } from "./utils/range.js";
+import { delimiter } from "../config.js";
+import { FilePart, Job } from "../part.js";
+import { Range } from "../utils/range.js";
+import { WorkerPool } from "./worker.js";
 
 const debug = Debug("upload-client");
 
@@ -30,7 +30,6 @@ export async function* generateUploadRequests(
   );
   const partSize = Math.ceil(Number(size) / partCount);
 
-  debug("generating %o upload requests for  %o", partCount, path);
   for (let i = 0; i < partCount; i++) {
     const start = i * partSize;
     let end = start + partSize;
@@ -45,6 +44,7 @@ export async function* generateUploadRequests(
       range
     );
 
+    debug("generated upload requests %o of %o for %o", i + 1, partCount, path);
     yield { path, size, range, checksumMD5 };
   }
 }

@@ -12,15 +12,15 @@ import { pipeline } from "node:stream/promises";
 import { parseRange } from "../part.js";
 import { endpointSchema, makeClient } from "../socket-client.js";
 import { _ClientSocket } from "../socket.js";
+import { UploadCreateError } from "../utils/errors.js";
+import { client, requestOptions } from "../utils/http-client.js";
+import { Progress } from "../utils/progress.js";
 import {
   generateUploadRequests,
   RangeOptions,
   UploadJob,
   UploadRequest
-} from "../upload-parts.js";
-import { UploadCreateError } from "../utils/errors.js";
-import { client, requestOptions } from "../utils/http-client.js";
-import { Progress } from "../utils/progress.js";
+} from "./upload-parts.js";
 import { WorkerPool } from "./worker.js";
 
 interface CompletedUploadJob extends UploadJob {}
@@ -262,10 +262,12 @@ class UploadClient {
         }
         promises.push(createUploadJobs(uploadRequests));
         promises.push(this.submitChecksum(path));
+        debug("submitting %o jobs", promises.length);
         await Promise.all(promises);
       })
     );
 
+    debug("submitting %o jobs", promises.length);
     await Promise.all(promises);
   }
 }

@@ -33,7 +33,7 @@ export class DownloadServer {
   listen(socket: _ServerSocket) {
     this.hasClient = true;
 
-    const { s3 } = this.io;
+    const { s3, dataSource } = this.io;
     socket.on(
       "download:complete",
       async (downloadJob: DownloadJob, callback: () => void) => {
@@ -59,7 +59,7 @@ export class DownloadServer {
           );
         }
 
-        await setVerified(input.Bucket, path);
+        await setVerified(input.Bucket, path, dataSource);
         callback();
       }
     );
@@ -73,7 +73,7 @@ export class DownloadServer {
 
     if (this.hasClient) {
       const io = this.io;
-      const { s3 } = io;
+      const { s3, dataSource } = io;
 
       const createDownloadJob = async (
         object: _BucketObject,
@@ -141,7 +141,7 @@ export class DownloadServer {
           }
 
           const checksumMD5 = object.ETag;
-          const part = await getPart(checksumMD5, range);
+          const part = await getPart(checksumMD5, range, dataSource);
           if (part === null) {
             debug("deleting unknown file %o", object.Key);
             await deleteObject(object);

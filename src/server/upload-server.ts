@@ -7,7 +7,11 @@ import { signedUrlOptions } from "../config.js";
 import { addFilePart, completePart, setChecksumSHA256 } from "../controller.js";
 import { parseRange } from "../part.js";
 import { _Server, _ServerSocket } from "../socket.js";
-import { makeSuffix, UploadJob, UploadRequest } from "../upload-parts.js";
+import {
+  makeSuffix,
+  UploadJob,
+  UploadRequest
+} from "../upload-client/upload-parts.js";
 import { UploadCreateError } from "../utils/errors.js";
 
 const debug = Debug("serve");
@@ -20,7 +24,7 @@ export class UploadServer {
   }
 
   listen(socket: _ServerSocket) {
-    const { s3 } = this.io;
+    const { s3, dataSource } = this.io;
     const { bucket } = socket;
 
     const getUploadJob = async (
@@ -32,7 +36,7 @@ export class UploadServer {
       // Check if already exists
       let success;
       try {
-        success = await addFilePart(bucket, uploadRequest);
+        success = await addFilePart(bucket, uploadRequest, dataSource);
       } catch (error) {
         debug(error);
         return { error: "unknown" };
@@ -65,6 +69,7 @@ export class UploadServer {
         uploadRequests: UploadRequest[],
         callback: (u: (UploadJob | UploadCreateError)[]) => void
       ) => {
+        debug("received %o upload requests", uploadRequests.length);
         const uploadJobs = await Promise.all(uploadRequests.map(getUploadJob));
         debug("sending %o upload jobs", uploadJobs.length);
         callback(uploadJobs);
@@ -79,7 +84,7 @@ export class UploadServer {
       ): Promise<void> => {
         parseRange(uploadJob);
         try {
-          await completePart(bucket, uploadJob);
+          await completePart(bucket, uploadJob, dataSource);
         } catch (error) {
           debug(error);
           callback({ error: "unknown" });
@@ -96,7 +101,7 @@ export class UploadServer {
         callback: (u: UploadCreateError | undefined) => void
       ): Promise<void> => {
         try {
-          await setChecksumSHA256(bucket, path, checksumSHA256);
+          await setChecksumSHA256(bucket, path, checksumSHA256, dataSource);
         } catch (error) {
           debug(error);
           callback({ error: "unknown" });

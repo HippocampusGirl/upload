@@ -45,3 +45,6 @@ yarn.lock
 
 # Cryptographic keys
 *.pem
+
+# Test databases
+*.sqlite
