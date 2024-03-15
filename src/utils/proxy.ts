@@ -17,4 +17,5 @@ export const getHttpsProxyAgent = (): Agent | undefined => {
     Joi.assert(httpProxy, httpProxySchema);
     return new HttpsProxyAgent(httpProxy);
   }
+  return undefined;
 };

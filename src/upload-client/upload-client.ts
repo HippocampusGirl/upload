@@ -1,11 +1,12 @@
 import { parse } from "bytes";
-import { Command } from "commander";
+import { Command, Option } from "commander";
 import Debug from "debug";
 import fastq, { queueAsPromised } from "fastq";
 import { Request } from "got";
 import Joi from "joi";
 import jwt from "jsonwebtoken";
 import { FileHandle, open } from "node:fs/promises";
+import { availableParallelism } from "node:os";
 import { PassThrough } from "node:stream";
 import { pipeline } from "node:stream/promises";
 
@@ -41,10 +42,11 @@ export const makeUploadClientCommand = () => {
       "16MB"
     )
     .option("--max-part-count <size>", "Maximum number of file parts", "10000")
-    .option(
-      "--num-threads <count>",
-      "Number of concurrent upload threads",
-      "20"
+    .addOption(
+      new Option(
+        "--num-threads <number>",
+        "Number of concurrent upload threads"
+      ).default(availableParallelism())
     )
     .action(async () => {
       const options = command.opts();
@@ -123,12 +125,12 @@ class UploadClient {
       fileHandle = await open(path);
       const readStream = fileHandle.createReadStream({
         ...range,
-        highWaterMark: 512 * 1024, // 512KB
       });
       await pipeline(
         readStream,
         async function* (source: AsyncIterable<Buffer>) {
           for await (const chunk of source) {
+            // debug("read chunk of %o of size %o", path, chunk.length);
             progress.gauge.pulse();
             yield chunk;
           }
@@ -167,6 +169,7 @@ class UploadClient {
           retryStream.once(
             "retry",
             (retryCount: number, error, createRetryStream: () => Request) => {
+              debug("upload job failed with error %o", error.message);
               fn(createRetryStream());
             }
           );
@@ -203,6 +206,7 @@ class UploadClient {
     const promises: Promise<any>[] = new Array();
 
     let uploadRequests: UploadRequest[] = new Array();
+
     const createUploadJobs = async (
       uploadRequests: UploadRequest[]
     ): Promise<void> => {
@@ -262,12 +266,12 @@ class UploadClient {
         }
         promises.push(createUploadJobs(uploadRequests));
         promises.push(this.submitChecksum(path));
-        debug("submitting %o jobs", promises.length);
+        // debug("submitting %o jobs", promises.length);
         await Promise.all(promises);
       })
     );
 
-    debug("submitting %o jobs", promises.length);
+    // debug("submitting %o jobs", promises.length);
     return Promise.all(promises);
   }
 }

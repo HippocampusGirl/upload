@@ -1,11 +1,12 @@
 import Debug from "debug";
 import { got, OptionsInit, RequestError } from "got";
+import { Agent } from "node:https";
 
 import { getHttpsProxyAgent } from "./proxy.js";
 
 const debug = Debug("got");
 
-const agent = getHttpsProxyAgent();
+const agent: Agent | undefined = getHttpsProxyAgent();
 export const client = got.extend({
   agent: {
     https: agent,
@@ -47,7 +48,7 @@ export const requestOptions: Options = {
     secureConnect: timeout,
     socket: timeout,
     response: timeout,
-    send: timeout,
+    send: 60 * 1000, // 1 minute
     request: requestTimeout,
   },
 };

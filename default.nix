@@ -4,8 +4,9 @@ pkgs.buildNpmPackage {
   src = ./.;
 
   nativeBuildInputs = with pkgs; [ python3 ];
+  nodejs = pkgs.nodejs_21;
 
-  npmDepsHash = "sha256-U6HGFC+bK8YHRPZ20PSAP4tDGEkgDQzrqx2vbZTqCAc=";
+  npmDepsHash = "sha256-J+zm4Uhtz5SzUWDBw0aSOgWjG/cy6+IFKoQaCJv33Gc=";
 
   installPhase = ''
     runHook preInstall

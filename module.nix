@@ -39,7 +39,7 @@ in {
           default = "sqlite";
           description = "Type of database to use";
         };
-        path = mkOption {
+        connection-string = mkOption {
           type = types.str;
           description = "Database path or URL";
         };
@@ -61,7 +61,7 @@ in {
           --port "${toString cfg.port}" \
           --public-key-file "${cfg.publicKeyFile}" \
           --database-type "${cfg.database.type}" \
-          --database-path "${cfg.database.path}"
+          --connection-string "${cfg.database.connection-string}"
       '';
       serviceConfig = {
         Restart = "on-failure";

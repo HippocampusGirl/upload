@@ -22,19 +22,19 @@
     "@socket.io/cluster-adapter": "^0.2.2",
     "@socket.io/sticky": "^1.0.4",
     "bytes": "^3.1.2",
-    "commander": "^11.1.0",
+    "commander": "^12.0.0",
     "debug": "^4.3.4",
     "dotenv": "^16.3.1",
     "fastq": "^1.15.0",
     "format-duration": "^3.0.2",
     "gauge": "^5.0.1",
-    "got": "^13.0.0",
+    "got": "^14.2.1",
     "https-proxy-agent": "^7.0.2",
     "joi": "^17.11.0",
     "jsonwebtoken": "^9.0.2",
     "memoizee": "^0.4.15",
     "pg": "^8.11.3",
-    "reflect-metadata": "^0.1.13",
+    "reflect-metadata": "^0.2.1",
     "socket.io": "^4.7.2",
     "socket.io-client": "^4.7.2",
     "sqlite3": "^5.1.7",
@@ -58,7 +58,7 @@
   },
   "optionalDependencies": {
     "bufferutil": "^4.0.8",
-    "utf-8-validate": "^5.0.10"
+    "utf-8-validate": "^6.0.3"
   },
   "pkg": {
     "options": [

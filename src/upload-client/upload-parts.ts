@@ -44,7 +44,7 @@ export async function* generateUploadRequests(
       range
     );
 
-    debug("generated upload requests %o of %o for %o", i + 1, partCount, path);
+    // debug("generated upload requests %o of %o for %o", i + 1, partCount, path);
     yield { path, size, range, checksumMD5 };
   }
 }
