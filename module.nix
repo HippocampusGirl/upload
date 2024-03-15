@@ -50,7 +50,9 @@ in {
     systemd.services.upload-server = {
       description = "Upload server";
       wantedBy = [ "multi-user.target" ];
-      after = [ "network.target" ];
+      after = [ "network.target" ]
+        ++ (lib.optional (cfg.database.type == "postgres")
+          "postgresql.service");
       script = ''
         export ENDPOINT="$(cat ${cfg.s3.endpointFile})"
         export ACCESS_KEY_ID="$(cat ${cfg.s3.accessKeyIdFile})"
@@ -85,6 +87,9 @@ in {
         ProtectKernelModules = true;
         ProtectKernelTunables = true;
         ProtectProc = "invisible";
+
+        BindPaths =
+          lib.optional (cfg.database.type == "postgres") "/var/run/postgresql";
 
         RemoveIPC = true;
         RestrictAddressFamilies = [ "AF_UNIX" "AF_INET" "AF_INET6" ];
