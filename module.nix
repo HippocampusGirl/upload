@@ -32,6 +32,18 @@ in {
           description = "Path to file containing the S3 secret access key";
         };
       };
+
+      database = {
+        type = mkOption {
+          type = types.enum [ "sqlite" "postgres" ];
+          default = "sqlite";
+          description = "Type of database to use";
+        };
+        path = mkOption {
+          type = types.str;
+          description = "Database path or URL";
+        };
+      };
     };
   };
   config = lib.mkIf cfg.enable {
@@ -45,7 +57,9 @@ in {
         export SECRET_ACCESS_KEY="$(cat ${cfg.s3.secretAccessKeyFile})"
         ${upload}/bin/upload.cjs serve \
           --port "${toString cfg.port}" \
-          --public-key-file "${cfg.publicKeyFile}"
+          --public-key-file "${cfg.publicKeyFile}" \
+          --database-type "${cfg.database.type}" \
+          --database-path "${cfg.database.path}"
       '';
       serviceConfig = {
         Restart = "on-failure";
@@ -73,7 +87,7 @@ in {
         ProtectProc = "invisible";
 
         RemoveIPC = true;
-        RestrictAddressFamilies = [ "AF_INET" "AF_INET6" ];
+        RestrictAddressFamilies = [ "AF_UNIX" "AF_INET" "AF_INET6" ];
         RestrictNamespaces = true;
         RestrictRealtime = true;
         RestrictSUIDSGID = true;
