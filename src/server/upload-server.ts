@@ -83,6 +83,7 @@ export class UploadServer {
         callback: (u: UploadCreateError | undefined) => void
       ): Promise<void> => {
         parseRange(uploadJob);
+        // debug("received complete event for upload job %o", uploadJob);
         try {
           await controller.completePart(bucket, uploadJob);
         } catch (error) {

@@ -8,7 +8,6 @@ import { createHash } from "node:crypto";
 import { FileHandle, open } from "node:fs/promises";
 import { pipeline } from "node:stream/promises";
 import { join } from "path";
-import { DataSource } from "typeorm";
 
 import { Controller } from "../controller.js";
 import { getDataSource } from "../data-source.js";
@@ -191,7 +190,6 @@ class DownloadClient {
         async function* (source: AsyncIterable<Buffer>) {
           for await (const chunk of source) {
             md5.update(chunk);
-
             size += chunk.length;
 
             progress.gauge.pulse();

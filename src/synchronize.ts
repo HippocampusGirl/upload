@@ -14,18 +14,16 @@ export const makeSynchronizeCommand = (): Command => {
         .choices(["sqlite", "postgres"])
         .default("sqlite")
     )
-    .addOption(
-      new Option(
-        "--database-path <path>",
-        "Path of the database to connect to"
-      ).default("server.sqlite")
+    .requiredOption(
+      "--connection-string <path>",
+      "Connection string to the database"
     )
     .showHelpAfterError()
     .action(async () => {
       const options = command.opts();
       const dataSource = await getDataSource(
         options.databaseType,
-        options.databasePath,
+        options.connectionString,
         true
       );
       dataSource.synchronize();

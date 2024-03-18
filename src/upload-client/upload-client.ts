@@ -24,7 +24,7 @@ import {
 } from "./upload-parts.js";
 import { WorkerPool } from "./worker.js";
 
-interface CompletedUploadJob extends UploadJob {}
+interface CompletedUploadJob extends UploadJob { }
 
 const debug = Debug("upload-client");
 
@@ -94,8 +94,11 @@ export const makeUploadClientCommand = () => {
 
       try {
         await client.submitPaths(paths, { minPartSize, maxPartCount });
+      } catch (error) {
+        debug("error during upload %O", error);
       } finally {
         socket.disconnect();
+        process.exit(0);
       }
     });
   return command;
@@ -155,43 +158,54 @@ class UploadClient {
   }
 
   async runUploadJob(uploadJob: UploadJob): Promise<CompletedUploadJob> {
-    const { url, range } = uploadJob;
-    const writeStream: Request = client.stream.put(url, {
-      headers: {
-        "Content-Type": "application/octet-stream",
-        "Content-Length": `${range.size()}`,
-      },
-      ...requestOptions,
-    });
-    return new Promise((resolve, reject) => {
-      const fn = async (retryStream: Request) => {
+    return new Promise((resolve: (value: Promise<CompletedUploadJob>) => void, reject) => {
+      const upload = async (retryStream: Request) => {
+        retryStream.once(
+          "retry",
+          (retryCount: number, error, createRetryStream: () => Request) => {
+            debug("upload job failed on retry %d with error %o", retryCount, error.message);
+            upload(createRetryStream());
+          }
+        );
         try {
-          retryStream.once(
-            "retry",
-            (retryCount: number, error, createRetryStream: () => Request) => {
-              debug("upload job failed with error %o", error.message);
-              fn(createRetryStream());
-            }
-          );
           await this.retryUploadJob(retryStream, uploadJob);
-          await this.finalizeUploadJob(uploadJob);
-          resolve(uploadJob);
+          resolve(this.finalizeUploadJob(uploadJob));
         } catch (error) {
-          debug(error);
+          debug("upload job failed with error %o", error);
         }
       };
-      fn(writeStream);
+
+      const { url, range } = uploadJob;
+      const writeStream: Request = client.stream.put(url, {
+        headers: {
+          "Content-Type": "application/octet-stream",
+          "Content-Length": `${range.size()}`,
+        },
+        ...requestOptions,
+      });
+      upload(writeStream);
     });
   }
+  // 
 
-  async finalizeUploadJob(uploadJob: CompletedUploadJob): Promise<void> {
+  // });
+
+  async finalizeUploadJob(uploadJob: CompletedUploadJob): Promise<CompletedUploadJob> {
     this.progress.completePart(uploadJob);
+    let error;
+    try {
+      error = await this.socket.emitWithAck("upload:complete", uploadJob);
+      if (error) {
+        debug("error finalizing upload job %o", error);
+      }
+    } finally {
+    }
     // debug(
     //   "completed partial upload for %s in range %s",
     //   uploadJob.path,
     //   uploadJob.range.toString()
     // );
-    await this.socket.emitWithAck("upload:complete", uploadJob);
+    return uploadJob;
   }
 
   async submitChecksum(path: string): Promise<void> {
@@ -199,79 +213,85 @@ class UploadClient {
       path,
       "sha256"
     );
-    await this.socket.emitWithAck("upload:checksum", path, checksumSHA256);
+    let error;
+    try {
+      error = await this.socket.emitWithAck(
+        "upload:checksum",
+        path,
+        checksumSHA256
+      );
+      if (error) {
+        debug("error submitting checksum %o", error);
+        // continue;
+      }
+    } finally {
+    }
   }
 
-  async submitPaths(paths: string[], options: RangeOptions): Promise<any> {
+  async createUploadJobs(
+    uploadRequests: UploadRequest[]
+  ): Promise<any> {
+    if (uploadRequests.length === 0) {
+      // Nothing to do
+      return;
+    }
+    let results: (UploadJob | UploadCreateError)[];
+    while (true) {
+      try {
+        results = await this.socket.emitWithAck("upload:create", uploadRequests);
+        break;
+      } catch (error) { }
+    }
+
     const promises: Promise<any>[] = new Array();
-
-    let uploadRequests: UploadRequest[] = new Array();
-
-    const createUploadJobs = async (
-      uploadRequests: UploadRequest[]
-    ): Promise<void> => {
-      if (uploadRequests.length === 0) {
-        return;
-      }
-      let results;
-      while (true) {
-        try {
-          results = (await this.socket
-            .timeout(5000)
-            .emitWithAck("upload:create", uploadRequests)) as (
-            | UploadJob
-            | UploadCreateError
-          )[];
-          break;
-        } catch (error) {}
-      }
-      for (const [index, result] of results.entries()) {
-        if ("error" in result) {
-          const { error } = result;
-          const uploadRequest = uploadRequests[index];
-          if (error == "upload-exists") {
-            this.progress.addPart(uploadRequest);
-            this.progress.completePart(uploadRequest);
-          } else {
-            debug(
-              'skipping upload job because "%s" for %s in range %s',
-              result.error,
-              uploadRequest.path,
-              uploadRequest.range.toString()
-            );
-          }
-          continue;
+    for (const [index, result] of results.entries()) {
+      if ("error" in result) {
+        const { error } = result;
+        const uploadRequest = uploadRequests[index];
+        if (error == "upload-exists") {
+          this.progress.addPart(uploadRequest);
+          this.progress.completePart(uploadRequest);
+        } else {
+          debug(
+            'skipping upload job because "%s" for %s in range %s',
+            result.error,
+            uploadRequest.path,
+            uploadRequest.range.toString()
+          );
         }
-        parseRange(result);
-        promises.push(this.queue.push(result));
-        this.progress.addPart(result);
+        continue;
       }
-    };
+      parseRange(result);
+      this.progress.addPart(result);
+      promises.push(this.queue.push(result));
+    }
 
-    promises.push(
-      ...paths.map(async (path): Promise<void> => {
-        const promises: Promise<void>[] = new Array();
+    return Promise.all(promises);
+  };
 
-        for await (const uploadRequest of generateUploadRequests(
-          path,
-          this.workerPool,
-          options
-        )) {
-          uploadRequests.push(uploadRequest);
+  async submitPaths(paths: string[], options: RangeOptions): Promise<any> {
+    const promises = paths.map(async (path): Promise<any> => {
+      const pathPromises: Promise<void>[] = new Array();
 
-          if (uploadRequests.length > 1000) {
-            promises.push(createUploadJobs(uploadRequests));
-            uploadRequests = new Array();
-          }
+      let uploadRequests: UploadRequest[] = new Array();
+      for await (const uploadRequest of generateUploadRequests(
+        path,
+        this.workerPool,
+        options
+      )) {
+        uploadRequests.push(uploadRequest);
+        if (uploadRequests.length > 1000) {
+          pathPromises.push(this.createUploadJobs(uploadRequests));
+          uploadRequests = new Array();
         }
-        promises.push(createUploadJobs(uploadRequests));
-        promises.push(this.submitChecksum(path));
-        // debug("submitting %o jobs", promises.length);
-        await Promise.all(promises);
-      })
-    );
+      }
 
-    // debug("submitting %o jobs", promises.length);
+      pathPromises.push(this.createUploadJobs(uploadRequests));
+      pathPromises.push(this.submitChecksum(path));
+      return Promise.all(pathPromises);
+    });
+
+    // debug("waiting for %d jobs", promises.length);
     return Promise.all(promises);
   }
 }

@@ -37,7 +37,7 @@ interface Options extends OptionsInit {
 
 export const retryCount = 100;
 export const timeout = 10 * 1000; // 10 seconds
-export const requestTimeout = 3600 * 1000; // 1 hour
+export const requestTimeout = 60 * 60 * 1000; // 1 hour
 export const requestOptions: Options = {
   retry: {
     limit: retryCount,
@@ -48,7 +48,7 @@ export const requestOptions: Options = {
     secureConnect: timeout,
     socket: timeout,
     response: timeout,
-    send: 60 * 1000, // 1 minute
+    send: requestTimeout,
     request: requestTimeout,
   },
 };

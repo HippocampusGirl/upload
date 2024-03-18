@@ -13,6 +13,8 @@ export const endpointSchema = Joi.string().uri({
 export const makeClient = (endpoint: string, token: string): _ClientSocket => {
   const options: Partial<ManagerOptions & SocketOptions> = {
     auth: { token },
+    ackTimeout: 5000, // 5 seconds
+    retries: 100
   };
 
   const agent = getHttpsProxyAgent();
