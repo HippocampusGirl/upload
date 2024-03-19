@@ -1,8 +1,13 @@
 {
-  "name": "upload",
+  "name": "@hippocampusgirl/upload",
   "version": "0.2.0",
   "description": "A software for data transfers via the cloud",
+  "repository": "https://github.com/HippocampusGirl/upload",
   "main": "build/index.ts",
+  "files": [
+    "build",
+    "src"
+  ],
   "type": "module",
   "bin": {
     "upload": "./build/index.js"

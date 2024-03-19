@@ -1,7 +1,7 @@
 { pkgs, lib }:
 pkgs.buildNpmPackage {
   name = "upload";
-  src = ./.;
+  src = pkgs.nix-gitignore.gitignoreSource [ ] ./.;
 
   nativeBuildInputs = with pkgs; [ python3 ];
   nodejs = pkgs.nodejs_21;
