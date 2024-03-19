@@ -1,5 +1,5 @@
 import { Command, Option } from "commander";
-import Debug from "./utils/debug.js";
+import Debug from "debug";
 
 import { getDataSource } from "./data-source.js";
 

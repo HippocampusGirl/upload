@@ -1,4 +1,4 @@
-import Debug from "../utils/debug.js";
+import Debug from "debug";
 import { stat } from "node:fs/promises";
 
 import { delimiter } from "../config.js";

@@ -1,4 +1,4 @@
-import Debug from "../utils/debug.js";
+import Debug from "debug";
 import { AsyncResource } from "node:async_hooks";
 import EventEmitter from "node:events";
 import { availableParallelism } from "node:os";

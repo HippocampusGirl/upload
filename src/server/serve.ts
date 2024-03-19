@@ -1,5 +1,5 @@
 import { Command, Option } from "commander";
-import Debug from "../utils/debug.js";
+import Debug from "debug";
 import jwt from "jsonwebtoken";
 import cluster from "node:cluster";
 import { readFileSync } from "node:fs";

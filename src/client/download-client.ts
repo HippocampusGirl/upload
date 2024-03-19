@@ -1,5 +1,5 @@
 import { Command, Option } from "commander";
-import Debug from "../utils/debug.js";
+import Debug from "debug";
 import fastq, { queueAsPromised } from "fastq";
 import { Request } from "got";
 import Joi from "joi";

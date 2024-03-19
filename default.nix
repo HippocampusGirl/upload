@@ -6,13 +6,7 @@ pkgs.buildNpmPackage {
   nativeBuildInputs = with pkgs; [ python3 ];
   nodejs = pkgs.nodejs_21;
 
-  npmDepsHash = lib.fakeHash;
-
-  installPhase = ''
-    runHook preInstall
-    mkdir --parents $out/bin
-    install --mode=555 --target-directory=$out/bin upload.cjs
-  '';
+  npmDepsHash = "sha256-NXsHg6u2dO7XOsbuzo8q+viFDYBGa0l+tbWwPde8ufY=";
 
   meta = with lib; {
     description = "A software for data transfers via the cloud";

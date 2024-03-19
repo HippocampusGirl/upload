@@ -1,7 +1,9 @@
+#! /usr/bin/env node
+
 import "reflect-metadata";
 
 import { Command } from "commander";
-import Debug from "./utils/debug.js";
+import Debug from "debug";
 import { isMainThread } from "node:worker_threads";
 
 import { makeCreateTokenCommand } from "./create-token.js";

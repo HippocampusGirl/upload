@@ -57,7 +57,7 @@ in {
         export ENDPOINT="$(cat ${cfg.s3.endpointFile})"
         export ACCESS_KEY_ID="$(cat ${cfg.s3.accessKeyIdFile})"
         export SECRET_ACCESS_KEY="$(cat ${cfg.s3.secretAccessKeyFile})"
-        ${upload}/bin/upload.cjs serve \
+        ${upload}/bin/upload serve \
           --port "${toString cfg.port}" \
           --public-key-file "${cfg.publicKeyFile}" \
           --database-type "${cfg.database.type}" \

@@ -1,4 +1,4 @@
-import Debug from "./debug.js";
+import Debug from "debug";
 import { got, OptionsInit, RequestError } from "got";
 import { Agent } from "node:https";
 

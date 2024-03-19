@@ -1,4 +1,4 @@
-import Debug from "./utils/debug.js";
+import Debug from "debug";
 import { DataSource } from "typeorm";
 import pg from "pg";
 import betterSqlite3 from "better-sqlite3";
