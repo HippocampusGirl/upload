@@ -1,4 +1,4 @@
-import Debug from "debug";
+import Debug from "./utils/debug.js";
 import Joi from "joi";
 import { io, ManagerOptions, SocketOptions } from "socket.io-client";
 

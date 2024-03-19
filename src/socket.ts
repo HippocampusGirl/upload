@@ -2,7 +2,7 @@ import { Server, Socket as ServerSocket } from "socket.io";
 import { Socket as ClientSocket } from "socket.io-client";
 
 import { ChecksumJob, DownloadJob } from "./download-schema.js";
-import { UploadJob, UploadRequest } from "./upload-client/upload-parts.js";
+import { UploadJob, UploadRequest } from "./client/upload-parts.js";
 import { UploadCreateError } from "./utils/errors.js";
 
 export interface ClientToServerEvents {
@@ -28,8 +28,8 @@ export interface ServerToClientEvents {
   "download:checksum": (checksumJob: ChecksumJob) => void;
 }
 
-export interface ServerSideEvents {}
-export interface SocketData {}
+export interface ServerSideEvents { }
+export interface SocketData { }
 
 export type _Server = Server<
   ClientToServerEvents,

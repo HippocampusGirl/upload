@@ -1,5 +1,7 @@
-import Debug from "debug";
+import Debug from "./utils/debug.js";
 import { DataSource } from "typeorm";
+import pg from "pg";
+import betterSqlite3 from "better-sqlite3";
 
 import { File, Part } from "./entity.js";
 
@@ -22,7 +24,8 @@ export const getDataSource = async (
   switch (type) {
     case "sqlite":
       dataSource = await new DataSource({
-        type: "sqlite",
+        type: "better-sqlite3",
+        driver: betterSqlite3,
         database: connectionString,
         ...config,
       }).initialize();
@@ -34,6 +37,7 @@ export const getDataSource = async (
     case "postgres":
       return new DataSource({
         type: "postgres",
+        driver: pg,
         url: connectionString,
         ...config,
       }).initialize();

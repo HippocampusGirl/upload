@@ -1,6 +1,7 @@
 import { Column, Entity, ManyToOne, OneToMany, PrimaryColumn } from "typeorm";
 
 import { Range } from "./utils/range.js";
+import { Relation } from "typeorm/common/RelationType.js";
 
 @Entity()
 export class Part {
@@ -16,7 +17,7 @@ export class Part {
   complete: boolean;
 
   @ManyToOne(() => File, (file) => file.parts)
-  file: File;
+  file: Relation<File>;
 
   constructor({ checksumMD5, start, end, complete, file }: Partial<Part>) {
     this.checksumMD5 = checksumMD5!;

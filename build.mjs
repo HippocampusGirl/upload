@@ -13,7 +13,7 @@ if (nodeExecutable.includes("nix")) {
 }
 
 const context = await esbuild.context({
-  entryPoints: ["src/index.ts"],
+  entryPoints: ["src/index.mts"],
   sourcemap: "inline",
   platform: "node",
   target: "node20",

@@ -1,5 +1,5 @@
 import { Command, Option } from "commander";
-import Debug from "debug";
+import Debug from "../utils/debug.js";
 import fastq, { queueAsPromised } from "fastq";
 import { Request } from "got";
 import Joi from "joi";
@@ -219,13 +219,13 @@ class DownloadClient {
     if (etag !== md5.digest("hex")) {
       throw new Error(
         "Received invalid response from server: " +
-          '"etag" does not match MD5 checksum calculated from response body'
+        '"etag" does not match MD5 checksum calculated from response body'
       );
     }
     if (downloadJob.checksumMD5 !== etag) {
       throw new Error(
         "Received invalid response from server: " +
-          '"etag" does not match MD5 checksum received from server'
+        '"etag" does not match MD5 checksum received from server'
       );
     }
     return {

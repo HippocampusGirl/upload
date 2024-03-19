@@ -1,6 +1,6 @@
-import Debug from "debug";
+import Debug from "../utils/debug.js";
 
-import { DeleteObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 import { signedUrlOptions } from "../config.js";
@@ -54,7 +54,7 @@ export class DownloadServer {
         if (path !== pathFromURL) {
           throw new Error(
             `Mismatched path between job and upload URL: ` +
-              `${path} != ${pathFromURL}`
+            `${path} != ${pathFromURL}`
           );
         }
 
@@ -67,46 +67,44 @@ export class DownloadServer {
     });
   }
 
+  async createDownloadJob(
+    object: _BucketObject,
+    part: Part
+  ): Promise<DownloadJob> {
+    let input = {
+      Bucket: object.Bucket,
+      Key: object.Key,
+    };
+
+    const url = await getSignedUrl(
+      this.io.s3,
+      new GetObjectCommand(input),
+      signedUrlOptions
+    );
+    const downloadJob: DownloadJob = {
+      bucket: object.Bucket,
+      url,
+      range: part.range,
+      path: part.file.path,
+      checksumMD5: part.checksumMD5,
+      size: part.file.size!,
+    };
+    debug("Created download job %o", downloadJob);
+    return downloadJob;
+  }
+  async deleteObject(object: _BucketObject): Promise<void> {
+    await this.io.s3.send(
+      new DeleteObjectCommand({
+        Bucket: object.Bucket,
+        Key: object.Key,
+      })
+    );
+  }
   async loop() {
-    debug("loop");
-
     if (this.hasClient) {
-      const io = this.io;
-      const { s3, controller } = io;
+      debug("loop");
 
-      const createDownloadJob = async (
-        object: _BucketObject,
-        part: Part
-      ): Promise<DownloadJob> => {
-        let input = {
-          Bucket: object.Bucket,
-          Key: object.Key,
-        };
-
-        const url = await getSignedUrl(
-          io.s3,
-          new GetObjectCommand(input),
-          signedUrlOptions
-        );
-        const downloadJob: DownloadJob = {
-          bucket: object.Bucket,
-          url,
-          range: part.range,
-          path: part.file.path,
-          checksumMD5: part.checksumMD5,
-          size: part.file.size!,
-        };
-        debug("Created download job %o", downloadJob);
-        return downloadJob;
-      };
-      const deleteObject = async (object: _BucketObject): Promise<void> => {
-        await s3.send(
-          new DeleteObjectCommand({
-            Bucket: object.Bucket,
-            Key: object.Key,
-          })
-        );
-      };
+      const { s3, controller } = this.io;
 
       let downloadJobs: DownloadJob[] = new Array();
       let files: File[] = new Array();
@@ -135,7 +133,7 @@ export class DownloadServer {
           if (range.size() !== object.Size) {
             throw new Error(
               "Mismatched size between object and range in file name: " +
-                `${object.Size} != ${range.size()}`
+              `${object.Size} != ${range.size()}`
             );
           }
 
@@ -143,20 +141,20 @@ export class DownloadServer {
           const part = await controller.getPart(checksumMD5, range);
           if (part === null) {
             debug("deleting unknown file %o", object.Key);
-            await deleteObject(object);
+            await this.deleteObject(object);
             continue;
           }
           const file = part.file;
           if (file.verified) {
             debug("deleting already verified part %o", object.Key);
-            await deleteObject(object);
+            await this.deleteObject(object);
             continue;
           }
 
           // Keep a list of files to send checksum jobs for
           files.push(file);
 
-          downloadJobs.push(await createDownloadJob(object, part));
+          downloadJobs.push(await this.createDownloadJob(object, part));
         } catch (error) {
           debug("could not parse object %o: %O", object, error);
         }

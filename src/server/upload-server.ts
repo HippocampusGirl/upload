@@ -1,17 +1,16 @@
-import Debug from "debug";
+import Debug from "../utils/debug.js";
 
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 import { signedUrlOptions } from "../config.js";
-import { Controller } from "../controller.js";
 import { parseRange } from "../part.js";
 import { _Server, _ServerSocket } from "../socket.js";
 import {
   makeSuffix,
   UploadJob,
   UploadRequest
-} from "../upload-client/upload-parts.js";
+} from "../client/upload-parts.js";
 import { UploadCreateError } from "../utils/errors.js";
 
 const debug = Debug("serve");

@@ -1,5 +1,5 @@
 import { Command, Option } from "commander";
-import Debug from "debug";
+import Debug from "../utils/debug.js";
 import jwt from "jsonwebtoken";
 import cluster from "node:cluster";
 import { readFileSync } from "node:fs";
@@ -23,8 +23,8 @@ import { UploadServer } from "./upload-server.js";
 
 // Allow socket to store payload
 declare module "socket.io" {
-  interface Socket extends ExtendedSocket {}
-  interface Server extends ExtendedServer {}
+  interface Socket extends ExtendedSocket { }
+  interface Server extends ExtendedServer { }
 }
 interface ExtendedSocket {
   bucket: string;

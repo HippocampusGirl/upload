@@ -1,4 +1,4 @@
-import Debug from "debug";
+import Debug from "../utils/debug.js";
 import { AsyncResource } from "node:async_hooks";
 import EventEmitter from "node:events";
 import { availableParallelism } from "node:os";
@@ -41,7 +41,7 @@ const kWorkerFreedEvent = Symbol("kWorkerFreedEvent");
 const kErrorEvent = Symbol("kErrorEvent");
 
 declare module "node:worker_threads" {
-  interface Worker extends ExtendedWorker {}
+  interface Worker extends ExtendedWorker { }
 }
 interface ExtendedWorker {
   [kTaskInfo]?: TaskInfo;
