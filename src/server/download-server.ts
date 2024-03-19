@@ -66,7 +66,7 @@ export class DownloadServer {
 
   startLoop(): void {
     debug("starting loop");
-
+    this.isLooping = true;
     const loop = this.loop.bind(this);
     setTimeout(loop, 1000);
   }

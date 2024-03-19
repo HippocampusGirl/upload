@@ -75,7 +75,7 @@ export class WorkerPool extends EventEmitter {
   }
 
   private addNewWorker(): void {
-    const worker = new Worker(__filename);
+    const worker = new Worker(new URL(import.meta.resolve("../index.js")));
     worker.on("message", (checksum: any) => {
       if (typeof checksum !== "string") {
         throw new Error("Invalid checksum");
