@@ -18,19 +18,16 @@ const debug = Debug("serve");
 
 export class DownloadServer {
   io: _Server;
-  hasClient: boolean;
+  isLooping: boolean;
 
   constructor(io: _Server) {
     this.io = io;
 
-    this.hasClient = false;
-
-    const loop = this.loop.bind(this);
-    setTimeout(loop, 1000);
+    this.isLooping = false;
   }
 
   listen(socket: _ServerSocket) {
-    this.hasClient = true;
+    this.startLoop();
 
     const { s3, controller } = this.io;
     socket.on(
@@ -63,8 +60,29 @@ export class DownloadServer {
       }
     );
     socket.on("disconnect", (reason) => {
-      this.hasClient = false;
+      this.stopLoop();
     });
+  }
+
+  startLoop(): void {
+    debug("starting loop");
+
+    const loop = this.loop.bind(this);
+    setTimeout(loop, 1000);
+  }
+  async loop(): Promise<void> {
+    if (!this.isLooping) {
+      debug("stopping loop");
+      return;
+    }
+
+    await this.checkDownloadJobs();
+
+    const loop = this.loop.bind(this);
+    setTimeout(loop, 10 * 60 * 1000); // 10 minutes
+  }
+  stopLoop(): void {
+    this.isLooping = false;
   }
 
   async createDownloadJob(
@@ -75,7 +93,6 @@ export class DownloadServer {
       Bucket: object.Bucket,
       Key: object.Key,
     };
-
     const url = await getSignedUrl(
       this.io.s3,
       new GetObjectCommand(input),
@@ -89,7 +106,7 @@ export class DownloadServer {
       checksumMD5: part.checksumMD5,
       size: part.file.size!,
     };
-    debug("Created download job %o", downloadJob);
+    debug("created download job %o", downloadJob);
     return downloadJob;
   }
   async deleteObject(object: _BucketObject): Promise<void> {
@@ -100,81 +117,77 @@ export class DownloadServer {
       })
     );
   }
-  async loop() {
-    if (this.hasClient) {
-      debug("loop");
+  async checkDownloadJobs(): Promise<void> {
+    debug("checking for new download jobs");
 
-      const { s3, controller } = this.io;
+    const { s3, controller } = this.io;
 
-      let downloadJobs: DownloadJob[] = new Array();
-      let files: File[] = new Array();
-      for await (const object of listObjects(s3)) {
+    let downloadJobs: DownloadJob[] = new Array();
+    let files: File[] = new Array();
+    for await (const object of listObjects(s3)) {
+      try {
+        if (object.Bucket === undefined) {
+          throw new Error('"object.Bucket" is undefined');
+        }
+        if (object.Key === undefined) {
+          throw new Error('"object.Key" is undefined');
+        }
+        if (object.Size === undefined) {
+          throw new Error('"size" is undefined');
+        }
+        if (object.ETag === undefined) {
+          throw new Error('"object.ETag" is undefined');
+        }
+
+        let range;
         try {
-          if (object.Bucket === undefined) {
-            throw new Error('"object.Bucket" is undefined');
-          }
-          if (object.Key === undefined) {
-            throw new Error('"object.Key" is undefined');
-          }
-          if (object.Size === undefined) {
-            throw new Error('"size" is undefined');
-          }
-          if (object.ETag === undefined) {
-            throw new Error('"object.ETag" is undefined');
-          }
-
-          let range;
-          try {
-            range = getRangeFromPathname(object.Key);
-          } catch (error) {
-            debug("could not get range from key %o: %O", object.Key, error);
-            continue;
-          }
-          if (range.size() !== object.Size) {
-            throw new Error(
-              "Mismatched size between object and range in file name: " +
-              `${object.Size} != ${range.size()}`
-            );
-          }
-
-          const checksumMD5 = object.ETag;
-          const part = await controller.getPart(checksumMD5, range);
-          if (part === null) {
-            debug("deleting unknown file %o", object.Key);
-            await this.deleteObject(object);
-            continue;
-          }
-          const file = part.file;
-          if (file.verified) {
-            debug("deleting already verified part %o", object.Key);
-            await this.deleteObject(object);
-            continue;
-          }
-
-          // Keep a list of files to send checksum jobs for
-          files.push(file);
-
-          downloadJobs.push(await this.createDownloadJob(object, part));
+          range = getRangeFromPathname(object.Key);
         } catch (error) {
-          debug("could not parse object %o: %O", object, error);
+          debug("deleting unknown file %o because the range could not be parsed: %O", object.Key, error);
+          await this.deleteObject(object);
+          continue;
+        }
+        if (range.size() !== object.Size) {
+          throw new Error(
+            "Mismatched size between object and range in file name: " +
+            `${object.Size} != ${range.size()}`
+          );
         }
 
-        if (downloadJobs.length > 1000) {
-          this.sendDownloadJobs(downloadJobs);
-          downloadJobs = new Array();
+        const checksumMD5 = object.ETag;
+        const part = await controller.getPart(checksumMD5, range);
+        if (part === null) {
+          debug("deleting unknown file %o", object.Key);
+          await this.deleteObject(object);
+          continue;
         }
+        const file = part.file;
+        if (file.verified) {
+          debug("deleting already verified part %o", object.Key);
+          await this.deleteObject(object);
+          continue;
+        }
+
+        // Keep a list of files to send checksum jobs for
+        files.push(file);
+
+        downloadJobs.push(await this.createDownloadJob(object, part));
+      } catch (error) {
+        debug("could not parse object %o: %O", object, error);
       }
 
-      for (const file of files) {
-        await this.submitChecksumJob(file);
-        continue;
+      if (downloadJobs.length > 1000) {
+        this.sendDownloadJobs(downloadJobs);
+        downloadJobs = new Array();
       }
-
-      this.sendDownloadJobs(downloadJobs);
     }
 
-    const loop = this.loop.bind(this);
-    setTimeout(loop, 10 * 60 * 1000); // 10 minutes
+    for (const file of files) {
+      await this.submitChecksumJob(file);
+      continue;
+    }
+
+    this.sendDownloadJobs(downloadJobs);
   }
 
   private sendDownloadJobs(downloadJobs: DownloadJob[]): void {
