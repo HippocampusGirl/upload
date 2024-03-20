@@ -16,7 +16,7 @@ import { _BucketObject, listObjects } from "../utils/storage.js";
 
 const debug = Debug("serve");
 
-const checksumMD5Schema = Joi.string().hex().length(32);
+const checksumMD5Schema = Joi.string().required().hex().length(32);
 export class DownloadServer {
   io: _Server;
   isLooping: boolean;
@@ -155,7 +155,7 @@ export class DownloadServer {
           );
         }
 
-        const checksumMD5 = object.ETag.replaceAll('"', "");
+        const checksumMD5 = object.ETag.replaceAll("\"", "");
         Joi.assert(checksumMD5, checksumMD5Schema);
         const part = await controller.getPart(checksumMD5, range);
         if (part === null) {

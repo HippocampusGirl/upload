@@ -163,16 +163,14 @@ class UploadClient {
         retryStream.once(
           "retry",
           (retryCount: number, error, createRetryStream: () => Request) => {
-            debug("upload job failed on retry %d with error %o", retryCount, error.message);
+            debug("upload job failed on attempt %d with error %o", retryCount, error.message);
             upload(createRetryStream());
           }
         );
         try {
           await this.retryUploadJob(retryStream, uploadJob);
           resolve(this.finalizeUploadJob(uploadJob));
-        } catch (error) {
-          debug("upload job failed with error %o", error);
-        }
+        } finally { }
       };
 
       const { url, range } = uploadJob;

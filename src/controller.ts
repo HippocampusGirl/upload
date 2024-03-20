@@ -106,10 +106,15 @@ export class Controller {
 
   async getPart(checksumMD5: string, range: Range): Promise<Part | null> {
     return this.submitTransaction(async (manager): Promise<Part | null> => {
-      return manager.findOneBy(Part, {
-        checksumMD5,
-        start: range.start,
-        end: range.end,
+      return manager.findOne(Part, {
+        where: {
+          checksumMD5,
+          start: range.start,
+          end: range.end,
+        },
+        relations: {
+          file: true,
+        },
       });
     });
   }
