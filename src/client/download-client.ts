@@ -15,10 +15,11 @@ import { ChecksumJob, DownloadFile, DownloadJob } from "../download-schema.js";
 import { parseRange } from "../part.js";
 import { endpointSchema, makeClient } from "../socket-client.js";
 import { _ClientSocket } from "../socket.js";
-import { calculateChecksum, touch } from "../utils/fs.js";
+import { touch } from "../utils/fs.js";
 import { client, requestOptions } from "../utils/http-client.js";
 import { Progress } from "../utils/progress.js";
 import { Range } from "../utils/range.js";
+import { WorkerPool } from "./worker.js";
 
 interface CompletedDownloadJob extends DownloadJob {
   size: number;
@@ -107,8 +108,13 @@ class DownloadClient {
   socket: _ClientSocket;
   queue: queueAsPromised<DownloadJob, void>;
   progress: Progress = new Progress();
+
   downloads: Set<string> = new Set();
+  checksumPaths: Set<string> = new Set();
+
   controller: Controller;
+
+  workerPool: WorkerPool = new WorkerPool();
 
   constructor(
     socket: _ClientSocket,
@@ -244,13 +250,20 @@ class DownloadClient {
 
     if (!file.verified) {
       const path = makePath(job);
-      const checksumSHA256 = await calculateChecksum(path, "sha256");
+
+      if (this.checksumPaths.has(path)) {
+        return;
+      }
+      this.checksumPaths.add(path);
+
+      const checksumSHA256 = await this.workerPool.submitCalculateChecksum(path, "sha256");
       if (checksumSHA256 === file.checksumSHA256) {
         debug("verified checksum for %s", path);
         await this.controller.setVerified(file.bucket, file.path);
       } else {
         throw new Error(`Invalid checksum for ${path}: ${checksumSHA256} != ${file.checksumSHA256}`);
       }
+
     }
 
     await this.socket.emitWithAck("download:verified", job);

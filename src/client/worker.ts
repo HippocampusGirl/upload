@@ -51,10 +51,9 @@ export class WorkerPool extends EventEmitter {
   private freeWorkers: Worker[] = [];
   private tasks: Task[] = [];
 
-  constructor() {
+  constructor(numThreads: number = 4 * availableParallelism()) {
     super();
 
-    const numThreads = 4 * availableParallelism();
     debug(`will use ${numThreads} threads for checksum calculation`);
     for (let i = 0; i < numThreads; i++) {
       this.addNewWorker();
@@ -76,7 +75,7 @@ export class WorkerPool extends EventEmitter {
 
   private addNewWorker(): void {
     const worker = new Worker(new URL(import.meta.resolve("../index.js")));
-    worker.on("message", (checksum: any) => {
+    worker.on("message", (checksum: unknown) => {
       if (typeof checksum !== "string") {
         throw new Error("Invalid checksum");
       }

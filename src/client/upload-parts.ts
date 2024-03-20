@@ -24,11 +24,16 @@ export async function* generateUploadRequests(
   const stats = await stat(path);
   const size = stats.size;
 
-  const partCount = Math.min(
-    maxPartCount,
-    Math.floor(Number(size) / Number(minPartSize))
-  );
+  let partCount = Math.floor(Number(size) / Number(minPartSize));
+  if (partCount < 1) {
+    partCount = 1;
+  }
+  if (partCount > maxPartCount) {
+    partCount = maxPartCount;
+  }
   const partSize = Math.ceil(Number(size) / partCount);
+
+  debug("will upload in %d chunks of size %d for %o", partCount, partSize, path);
 
   for (let i = 0; i < partCount; i++) {
     const start = i * partSize;
@@ -44,7 +49,6 @@ export async function* generateUploadRequests(
       range
     );
 
-    // debug("generated upload requests %o of %o for %o", i + 1, partCount, path);
     yield { path, size, range, checksumMD5 };
   }
 }
