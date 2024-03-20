@@ -15,12 +15,14 @@
         pkgs = nixpkgs.legacyPackages.${system};
 
         upload = pkgs.callPackage ./. { };
-      in {
+      in
+      {
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
             awscli
             bun
             nodejs_21
+            nixpkgs-fmt
             nodePackages.pnpm
             nodePackages.typescript
             nodePackages.typescript-language-server

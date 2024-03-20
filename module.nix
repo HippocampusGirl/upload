@@ -2,7 +2,8 @@
 let
   cfg = config.services.upload-server;
   upload = pkgs.callPackage ./. { };
-in {
+in
+{
   options = with lib; {
     services.upload-server = {
       enable = mkEnableOption "Enable upload server";
@@ -58,7 +59,7 @@ in {
       wantedBy = [ "multi-user.target" ];
       after = [ "network.target" ]
         ++ (lib.optional (cfg.database.type == "postgres")
-          "postgresql.service");
+        "postgresql.service");
       script = ''
         export ENDPOINT="$(cat ${cfg.s3.endpointFile})"
         export ACCESS_KEY_ID="$(cat ${cfg.s3.accessKeyIdFile})"
@@ -67,7 +68,7 @@ in {
           --port "${toString cfg.port}" \
           --public-key-file "${cfg.publicKeyFile}" \
           --database-type "${cfg.database.type}" \
-          --connection-string "${cfg.database.connection-string}" 
+          --connection-string "${cfg.database.connection-string}"
       '';
       serviceConfig = {
         Restart = "on-failure";
