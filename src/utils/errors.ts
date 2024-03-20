@@ -10,10 +10,10 @@ export class UnauthorizedError extends Error {
   }
 }
 
-export interface UnknownError {
+interface UnknownError {
   error: "unknown";
 }
-export interface UploadCreateExistsError {
+interface UploadCreateExistsError {
   error: "upload-exists";
 }
 export type UploadCreateError = UploadCreateExistsError | UnknownError;

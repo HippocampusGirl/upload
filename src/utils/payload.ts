@@ -10,9 +10,8 @@ export const CloudflareBucketLocationConstraint = {
 export type CloudflareBucketLocationConstraint =
   keyof typeof CloudflareBucketLocationConstraint;
 
-export type Type = "download" | "upload";
 export interface Payload {
-  type: Type;
+  type: "download" | "upload";
   name: string;
   loc?: CloudflareBucketLocationConstraint;
 }

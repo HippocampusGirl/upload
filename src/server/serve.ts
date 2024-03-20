@@ -60,30 +60,29 @@ export const makeServeCommand = () => {
         "Number of concurrent upload threads"
       ).default(availableParallelism())
     )
-    .option("--verbose", "Output extra debug information")
     .action(async () => {
       const options = command.opts();
-      const port: number = parseInt(options.port, 10);
+      const port: number = parseInt(options["port"], 10);
       if (Number.isNaN(port)) {
         throw new Error(`"port" is not an integer`);
       }
-      const publicKeyFile = options.publicKeyFile;
+      const publicKeyFile = options["publicKeyFile"];
       if (typeof publicKeyFile !== "string") {
         throw new Error("publicKeyFile must be a string");
       }
       const publicKey = readFileSync(publicKeyFile, "utf8");
       const dataSource = await getDataSource(
-        options.databaseType,
-        options.connectionString,
-        options.verbose
+        options["databaseType"],
+        options["connectionString"],
+        options["debug"]
       );
       const controller = new Controller(dataSource);
-      serve(port, publicKey, controller, parseInt(options.numThreads, 10));
+      serve(port, publicKey, controller, parseInt(options["numThreads"], 10));
     });
   return command;
 };
 
-export const serve = (
+const serve = (
   port: number,
   publicKey: string,
   controller: Controller,

@@ -54,13 +54,13 @@ export const makeDownloadClientCommand = () => {
     .action(async () => {
       const options = command.opts();
 
-      const endpoint = options.endpoint;
+      const endpoint = options["endpoint"];
       if (typeof endpoint !== "string") {
         throw new Error(`"endpoint" needs to be a string`);
       }
       Joi.assert(endpoint, endpointSchema);
 
-      const token = options.token;
+      const token = options["token"];
       if (typeof token !== "string") {
         throw new Error(`"token" needs to be a string`);
       }
@@ -73,7 +73,7 @@ export const makeDownloadClientCommand = () => {
         throw new Error(`"token" is not a download token`);
       }
 
-      const numThreads = parseInt(options.numThreads, 10);
+      const numThreads = parseInt(options["numThreads"], 10);
       if (typeof numThreads !== "number") {
         throw new Error(`"numThreads" needs to be a number`);
       }
@@ -86,8 +86,8 @@ export const makeDownloadClientCommand = () => {
 
       const socket = makeClient(endpoint, token);
       const dataSource = await getDataSource(
-        options.databaseType,
-        options.connectionString
+        options["databaseType"],
+        options["connectionString"]
       );
       const controller = new Controller(dataSource);
       const client = new DownloadClient(socket, numThreads, controller);

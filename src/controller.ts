@@ -106,7 +106,7 @@ export class Controller {
 
   async getPart(checksumMD5: string, range: Range): Promise<Part | null> {
     return this.submitTransaction(async (manager): Promise<Part | null> => {
-      return await manager.findOneBy(Part, {
+      return manager.findOneBy(Part, {
         checksumMD5,
         start: range.start,
         end: range.end,

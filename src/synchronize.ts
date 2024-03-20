@@ -22,8 +22,8 @@ export const makeSynchronizeCommand = (): Command => {
     .action(async () => {
       const options = command.opts();
       const dataSource = await getDataSource(
-        options.databaseType,
-        options.connectionString,
+        options["databaseType"],
+        options["connectionString"],
         true
       );
       dataSource.synchronize();

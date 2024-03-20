@@ -1,5 +1,3 @@
-import Joi from "joi";
-
 export class Range {
   start: number; // inclusive
   end: number; // inclusive
@@ -24,26 +22,3 @@ export class Range {
     return `${this.start}-${this.end}`;
   }
 }
-
-const byStart = (a: Range, b: Range): number => a.start - b.start;
-export const reduceRanges = (ranges: Range[]): Range[] =>
-  ranges.sort(byStart).reduce((array: Range[], range: Range): Range[] => {
-    if (array.length === 0) {
-      array.push(range);
-      return array;
-    }
-    const { start, end } = range;
-    const previous = array[array.length - 1];
-    if (previous.touches(range)) {
-      previous.start = Math.min(previous.start, start);
-      previous.end = Math.max(previous.end, end);
-    } else {
-      array.push(range);
-    }
-    return array;
-  }, new Array<Range>());
-
-export const rangeSchema = Joi.object().keys({
-  start: Joi.number().required(),
-  end: Joi.number().required(),
-});

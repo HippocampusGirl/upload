@@ -1,16 +1,20 @@
 import Debug from "debug";
-import { got, OptionsInit, RequestError } from "got";
+import { Agents, got, OptionsInit, RequestError } from "got";
 import { Agent } from "node:https";
 
 import { getHttpsProxyAgent } from "./proxy.js";
 
 const debug = Debug("got");
 
-const agent: Agent | undefined = getHttpsProxyAgent();
+const agent: Agents = {};
+
+const httpsProxyAgent: Agent | null = getHttpsProxyAgent();
+if (httpsProxyAgent) {
+  agent.https = httpsProxyAgent;
+}
+
 export const client = got.extend({
-  agent: {
-    https: agent,
-  },
+  agent,
   hooks: {
     beforeRequest: [
       (options) => {
@@ -35,9 +39,9 @@ interface Options extends OptionsInit {
   isStream?: true;
 }
 
-export const retryCount = 100;
-export const timeout = 10 * 1000; // 10 seconds
-export const requestTimeout = 60 * 60 * 1000; // 1 hour
+const retryCount = 100;
+const timeout = 10 * 1000; // 10 seconds
+const requestTimeout = 60 * 60 * 1000; // 1 hour
 export const requestOptions: Options = {
   retry: {
     limit: retryCount,

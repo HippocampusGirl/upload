@@ -13,7 +13,7 @@ const debug = Debug("upload-client");
 interface Input {
   path: string;
   algorithm: string;
-  range?: Range;
+  range: Range | undefined;
 }
 
 type Callback = (error: Error | null, checksum: string | null) => void;

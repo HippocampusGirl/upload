@@ -28,13 +28,12 @@ export const makeS3Client = (): S3Client => {
   });
 };
 
-export const getBucketName = (name: string): string => `${prefix}${name}`;
 export const requireBucketName = async (
   s3: S3Client,
   name: string,
   loc: CloudflareBucketLocationConstraint | undefined
 ): Promise<string> => {
-  const bucket = getBucketName(name);
+  const bucket = `${prefix}${name}`;
   const bucketInput = { Bucket: bucket };
 
   try {
@@ -57,7 +56,7 @@ export const requireBucketName = async (
   return bucket;
 };
 
-export async function* listObjectsInBucket(
+async function* listObjectsInBucket(
   s3: S3Client,
   bucket: string
 ): AsyncGenerator<_Object, void, undefined> {
@@ -68,6 +67,9 @@ export async function* listObjectsInBucket(
   do {
     const output = await s3.send(new ListObjectsCommand(input));
     isTruncated = output.IsTruncated ?? false;
+    if (output.NextMarker === undefined) {
+      throw new Error("ListObjectsCommand did not return a marker even though IsTruncated is true");
+    }
     input.Marker = output.NextMarker;
     const objects = output.Contents;
     if (objects !== undefined) {

@@ -51,13 +51,13 @@ export const makeUploadClientCommand = () => {
     .action(async () => {
       const options = command.opts();
 
-      const endpoint = options.endpoint;
+      const endpoint = options["endpoint"];
       if (typeof endpoint !== "string") {
         throw new Error(`"endpoint" needs to be a string`);
       }
       Joi.assert(endpoint, endpointSchema);
 
-      const token = options.token;
+      const token = options["token"];
       if (typeof token !== "string") {
         throw new Error(`"token" needs to be a string`);
       }
@@ -70,21 +70,21 @@ export const makeUploadClientCommand = () => {
         throw new Error(`"token" is not an upload token`);
       }
 
-      const paths = options.path;
+      const paths = options["path"];
       if (!Array.isArray(paths)) {
         throw new Error(`"paths" needs to be an array`);
       }
 
-      const minPartSize = parse(options.minPartSize);
+      const minPartSize = parse(options["minPartSize"]);
       if (!Number.isInteger(minPartSize) || minPartSize === null) {
         throw new Error(`"minPartSize" is not an integer`);
       }
-      const maxPartCount = Number(options.maxPartCount);
+      const maxPartCount = Number(options["maxPartCount"]);
       if (!Number.isInteger(maxPartCount) || maxPartCount === null) {
         throw new Error(`"maxPartCount" is not an integer`);
       }
 
-      const numThreads = parseInt(options.numThreads, 10);
+      const numThreads = parseInt(options["numThreads"], 10);
       if (typeof numThreads !== "number") {
         throw new Error(`"numThreads" needs to be a number`);
       }
@@ -248,6 +248,9 @@ class UploadClient {
       if ("error" in result) {
         const { error } = result;
         const uploadRequest = uploadRequests[index];
+        if (uploadRequest === undefined) {
+          throw new Error(`Received invalid response from server: "uploadRequests[${index}]" is undefined`);
+        }
         if (error == "upload-exists") {
           this.progress.addPart(uploadRequest);
           this.progress.completePart(uploadRequest);

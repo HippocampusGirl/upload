@@ -23,7 +23,8 @@ if (isMainThread) {
     .addCommand(makeDownloadClientCommand())
     .addCommand(makeSynchronizeCommand())
     .hook("preAction", (that) => {
-      if (that.opts().debug) {
+      const options = that.opts();
+      if (options["debug"]) {
         Debug.enable("*");
       } else {
         Debug.enable(

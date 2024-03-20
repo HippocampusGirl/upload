@@ -157,7 +157,7 @@ export class DownloadServer {
         const checksumMD5 = object.ETag;
         const part = await controller.getPart(checksumMD5, range);
         if (part === null) {
-          debug("deleting unknown file %o", object.Key);
+          debug("deleting unknown file %o with checksum %o and range %o", object.Key, checksumMD5, range);
           await this.deleteObject(object);
           continue;
         }

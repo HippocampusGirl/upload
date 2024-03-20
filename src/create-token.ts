@@ -20,12 +20,12 @@ export const makeCreateTokenCommand = (): Command => {
     .action(() => {
       const options = command.opts();
 
-      const name = options.name;
-      const type = options.type;
-      const loc = options.loc;
+      const name = options["name"];
+      const type = options["type"];
+      const loc = options["loc"];
       const payload: Payload = { name, type, loc };
 
-      const privateKeyFile = options.privateKeyFile;
+      const privateKeyFile = options["privateKeyFile"];
       if (typeof privateKeyFile !== "string") {
         throw new Error("privateKeyFile must be a string");
       }
@@ -38,7 +38,7 @@ export const makeCreateTokenCommand = (): Command => {
   return command;
 };
 
-export const createToken = (payload: any, privateKey: string): string => {
+const createToken = (payload: any, privateKey: string): string => {
   payload = validate(payloadSchema, payload);
   const token = jwt.sign(payload, privateKey, { algorithm: "ES256" });
   return token;

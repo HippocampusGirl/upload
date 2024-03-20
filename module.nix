@@ -7,6 +7,12 @@ in {
     services.upload-server = {
       enable = mkEnableOption "Enable upload server";
 
+      debug = mkOption {
+        type = types.bool;
+        default = false;
+        description = "Whether to enable debug logging";
+      };
+
       port = mkOption {
         type = types.int;
         default = 3000;
@@ -57,11 +63,11 @@ in {
         export ENDPOINT="$(cat ${cfg.s3.endpointFile})"
         export ACCESS_KEY_ID="$(cat ${cfg.s3.accessKeyIdFile})"
         export SECRET_ACCESS_KEY="$(cat ${cfg.s3.secretAccessKeyFile})"
-        ${upload}/bin/upload serve \
+        ${upload}/bin/upload serve ${lib.optionalString cfg.debug " --debug"} \
           --port "${toString cfg.port}" \
           --public-key-file "${cfg.publicKeyFile}" \
           --database-type "${cfg.database.type}" \
-          --connection-string "${cfg.database.connection-string}"
+          --connection-string "${cfg.database.connection-string}" 
       '';
       serviceConfig = {
         Restart = "on-failure";

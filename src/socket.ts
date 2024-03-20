@@ -5,7 +5,7 @@ import { ChecksumJob, DownloadJob } from "./download-schema.js";
 import { UploadJob, UploadRequest } from "./client/upload-parts.js";
 import { UploadCreateError } from "./utils/errors.js";
 
-export interface ClientToServerEvents {
+interface ClientToServerEvents {
   "download:complete": (downloadJob: DownloadJob, callback: () => void) => void;
   "download:verified": (downloadJob: DownloadJob, callback: () => void) => void;
   "upload:create": (
@@ -23,13 +23,13 @@ export interface ClientToServerEvents {
   ) => void;
 }
 
-export interface ServerToClientEvents {
+interface ServerToClientEvents {
   "download:create": (downloadJobs: DownloadJob[]) => void;
   "download:checksum": (checksumJob: ChecksumJob) => void;
 }
 
-export interface ServerSideEvents { }
-export interface SocketData { }
+interface ServerSideEvents { }
+interface SocketData { }
 
 export type _Server = Server<
   ClientToServerEvents,
