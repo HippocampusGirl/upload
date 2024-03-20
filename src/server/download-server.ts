@@ -66,7 +66,7 @@ export class DownloadServer {
     await this.checkDownloadJobs();
 
     const loop = this.loop.bind(this);
-    setTimeout(loop, 10 * 60 * 1000); // 10 minutes
+    setTimeout(loop, 1 * 60 * 1000); // 1 minute
   }
   stopLoop(): void {
     this.isLooping = false;
