@@ -1,7 +1,7 @@
-import Debug from "debug";
-
-import { DeleteObjectCommand, GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import Debug from "debug";
+import Joi from "joi";
 
 import { signedUrlOptions } from "../config.js";
 import {
@@ -16,6 +16,7 @@ import { _BucketObject, listObjects } from "../utils/storage.js";
 
 const debug = Debug("serve");
 
+const checksumMD5Schema = Joi.string().hex().length(32);
 export class DownloadServer {
   io: _Server;
   isLooping: boolean;
@@ -154,10 +155,11 @@ export class DownloadServer {
           );
         }
 
-        const checksumMD5 = object.ETag;
+        const checksumMD5 = object.ETag.replaceAll('"', "");
+        Joi.assert(checksumMD5, checksumMD5Schema);
         const part = await controller.getPart(checksumMD5, range);
         if (part === null) {
-          debug("deleting unknown file %o with checksum %o and range %o", object.Key, checksumMD5, range);
+          debug("deleting unknown file %o with checksum %o and range from %o to %o", object.Key, checksumMD5, range.start, range.end);
           await this.deleteObject(object);
           continue;
         }
