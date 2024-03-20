@@ -1,4 +1,5 @@
 import { DataSource } from "typeorm";
+
 import { Controller } from "../controller.js";
 import { getDataSource } from "../data-source.js";
 import { Range } from "../utils/range.js";
@@ -27,4 +28,16 @@ describe("controller", () => {
         expect(part).toMatchObject({ range });
         expect(part!.file).toMatchObject({ path });
     });
+
+    it("can add and retrieve file"), async () => {
+        const controller = new Controller(dataSource);
+
+        const bucket = "bucket";
+        const path = "path";
+        const checksumSHA256 = "checksumSHA256";
+        await controller.setChecksumSHA256(bucket, path, checksumSHA256);
+        const file = await controller.getFile(bucket, path);
+        expect(file).not.toBeNull();
+        expect(file).toMatchObject({ path, checksumSHA256 });
+    }
 })
