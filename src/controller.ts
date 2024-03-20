@@ -1,5 +1,5 @@
 import fastq, { queueAsPromised } from "fastq";
-import { DataSource, EntityManager } from "typeorm";
+import { DataSource, EntityManager, IsNull, Not } from "typeorm";
 
 import { File, Part } from "./entity.js";
 import { FilePart } from "./part.js";
@@ -118,9 +118,9 @@ export class Controller {
       });
     });
   }
-  async completePart(bucket: string, filePart: FilePart): Promise<boolean> {
+  async completePart(bucket: string, filePart: FilePart): Promise<File> {
     const { path, range, checksumMD5 } = filePart;
-    return this.submitTransaction(async (manager): Promise<boolean> => {
+    return this.submitTransaction(async (manager): Promise<File> => {
       const result = await manager.update(Part, checksumMD5, {
         complete: true,
       });
@@ -137,13 +137,18 @@ export class Controller {
         throw new Error(`Part not found for ${bucket} ${path} ${range}`);
       }
       checkPart(part, range, bucket, path);
-      return part.file.verified;
+      return part.file;
     });
   }
 
   async getFile(bucket: string, path: string): Promise<File | null> {
     return this.submitTransaction(async (manager): Promise<File | null> => {
       return await manager.findOneBy(File, { bucket, path });
+    });
+  }
+  async getFilesToVerify(): Promise<File[]> {
+    return this.submitTransaction(async (manager): Promise<File[]> => {
+      return await manager.find(File, { where: { checksumSHA256: Not(IsNull()), verified: false } });
     });
   }
   async setVerified(bucket: string, path: string): Promise<void> {

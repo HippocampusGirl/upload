@@ -1,7 +1,7 @@
 import { Column, Entity, ManyToOne, OneToMany, PrimaryColumn } from "typeorm";
 
-import { Range } from "./utils/range.js";
 import { Relation } from "typeorm/common/RelationType.js";
+import { Range, reduceRanges } from "./utils/range.js";
 
 @Entity()
 export class Part {
@@ -65,5 +65,23 @@ export class File {
     this.verified = verified || false;
     this.checksumSHA256 = checksumSHA256 || null;
     this.parts = parts || new Array();
+  }
+
+  get complete(): boolean {
+    if (this.size === undefined || this.checksumSHA256 === undefined) {
+      return false;
+    }
+    const ranges = reduceRanges(
+      this.parts
+        .filter(({ complete }) => complete)
+        .map(({ range }) => range)
+    );
+    const range = ranges[0];
+    if (range === undefined) {
+      return false;
+    }
+    const { start } = range;
+    const complete = start == 0 && range.size() == this.size;
+    return complete;
   }
 }

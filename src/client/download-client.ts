@@ -16,10 +16,11 @@ import {
   DownloadFilePart,
   DownloadJob
 } from "../download-schema.js";
+import { File } from "../entity.js";
 import { parseRange } from "../part.js";
 import { endpointSchema, makeClient } from "../socket-client.js";
 import { _ClientSocket } from "../socket.js";
-import { touch } from "../utils/fs.js";
+import { calculateChecksum, touch } from "../utils/fs.js";
 import { client, requestOptions } from "../utils/http-client.js";
 import { Progress } from "../utils/progress.js";
 import { Range } from "../utils/range.js";
@@ -103,7 +104,7 @@ export const makeDownloadClientCommand = () => {
   return command;
 };
 
-const makePath = (job: DownloadFilePart | ChecksumJob): string => {
+const makePath = (job: DownloadFilePart | ChecksumJob | File): string => {
   return join(job.bucket, job.path);
 };
 
@@ -234,64 +235,73 @@ class DownloadClient {
     };
   }
 
+  async verify(file: File): Promise<void> {
+    if (file.verified) {
+      return;
+    }
+    const path = makePath(file);
+    const checksumSHA256 = await calculateChecksum(path, "sha256");
+    if (checksumSHA256 === file.checksumSHA256) {
+      debug("verified checksum for %s", path);
+      return;
+    }
+    throw new Error(`Invalid checksum for ${path}: ${checksumSHA256} != ${file.checksumSHA256}`);
+  }
   async finalizeDownloadJob(downloadJob: CompletedDownloadJob): Promise<void> {
     this.progress.completePart(downloadJob);
 
-    const { range } = downloadJob;
-    debug(
-      "completed partial download for %s in range %s",
-      downloadJob.path,
-      range.toString()
-    );
-
-    const verified = await this.controller.completePart(
-      downloadJob.bucket,
-      downloadJob
-    );
-
-    await this.socket.emitWithAck("download:complete", downloadJob);
-
-    if (verified) {
-      await this.socket.emitWithAck("download:verified", downloadJob);
-    }
-  }
-
-  async runDownloadJob(downloadJob: DownloadJob): Promise<void> {
     // debug(
-    //   "running partial download for %s in range %s",
+    //   "completed partial download for %s in range %s",
     //   downloadJob.path,
     //   downloadJob.range.toString()
     // );
-    const { url } = downloadJob;
 
-    let readStream: Request;
-    try {
-      readStream = client.stream.get(url, { ...requestOptions });
-    } catch (error) {
-      debug(error);
+    const file = await this.controller.completePart(
+      downloadJob.bucket,
+      downloadJob
+    );
+    await this.socket.emitWithAck("download:complete", downloadJob);
+
+    if (file.verified) {
+      return;
+    }
+    if (!file.complete) {
       return;
     }
 
-    return new Promise((resolve, reject) => {
-      const fn = async (retryStream: Request) => {
+    await this.verify(file);
+
+    await this.controller.setVerified(file.bucket, file.path);
+    await this.socket.emitWithAck("download:verified", downloadJob);
+  }
+
+  async runDownloadJob(downloadJob: DownloadJob): Promise<void> {
+    return new Promise((resolve: (value: Promise<void>) => void, reject) => {
+      const download = async (retryStream: Request) => {
+        retryStream.once(
+          "retry",
+          (retryCount: number, error, createRetryStream: () => Request) => {
+            debug("download job failed on attempt %d with error %o", retryCount, error.message);
+            download(createRetryStream());
+          }
+        );
         try {
-          retryStream.once(
-            "retry",
-            (retryCount: number, error, createRetryStream: () => Request) => {
-              fn(createRetryStream());
-            }
-          );
-          let completedDownloadJob = await this.retryDownloadJob(
-            retryStream,
-            downloadJob
-          );
-          await this.finalizeDownloadJob(completedDownloadJob);
-          resolve();
-        } catch (error) {
-          debug(error);
-        }
+          await this.retryDownloadJob(retryStream, downloadJob);
+          resolve(this.finalizeDownloadJob(downloadJob));
+        } finally { }
       };
-      fn(readStream);
+
+      const { url } = downloadJob;
+
+      let readStream: Request;
+      try {
+        readStream = client.stream.get(url, { ...requestOptions });
+      } catch (error) {
+        debug(error);
+        return;
+      }
+
+      download(readStream);
     });
   }
 }

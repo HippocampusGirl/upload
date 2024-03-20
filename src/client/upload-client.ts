@@ -184,9 +184,6 @@ class UploadClient {
       upload(writeStream);
     });
   }
-  // 
-
-  // });
 
   async finalizeUploadJob(uploadJob: CompletedUploadJob): Promise<CompletedUploadJob> {
     this.progress.completePart(uploadJob);
@@ -271,8 +268,8 @@ class UploadClient {
   };
 
   async submitPaths(paths: string[], options: RangeOptions): Promise<any> {
-    const promises = paths.map(async (path): Promise<any> => {
-      const pathPromises: Promise<void>[] = new Array();
+    const jobs = paths.map(async (path): Promise<void> => {
+      const promises: Promise<void>[] = new Array();
 
       let uploadRequests: UploadRequest[] = new Array();
       for await (const uploadRequest of generateUploadRequests(
@@ -282,17 +279,19 @@ class UploadClient {
       )) {
         uploadRequests.push(uploadRequest);
         if (uploadRequests.length > 1000) {
-          pathPromises.push(this.createUploadJobs(uploadRequests));
+          promises.push(this.createUploadJobs(uploadRequests));
           uploadRequests = new Array();
         }
       }
 
-      pathPromises.push(this.createUploadJobs(uploadRequests));
-      pathPromises.push(this.submitChecksum(path));
-      return Promise.all(pathPromises);
+      promises.push(this.createUploadJobs(uploadRequests));
+      promises.push(this.submitChecksum(path));
+      await Promise.all(promises);
+
+      debug("completed upload for %o", path);
     });
 
-    // debug("waiting for %d jobs", promises.length);
-    return Promise.all(promises);
+    // debug("waiting for %d jobs", jobs.length);
+    return Promise.all(jobs);
   }
 }

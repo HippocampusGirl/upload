@@ -123,8 +123,18 @@ export class DownloadServer {
 
     const { s3, controller } = this.io;
 
+    let checksums: Set<string> = new Set();
+    const checkChecksumJob = async (file: File): Promise<void> => {
+      const checksumSHA256 = file.checksumSHA256;
+      if (checksumSHA256 !== null) {
+        if (!checksums.has(checksumSHA256)) {
+          await this.submitChecksumJob(file);
+          checksums.add(checksumSHA256);
+        }
+      }
+    };
+
     let downloadJobs: DownloadJob[] = new Array();
-    let files: File[] = new Array();
     for await (const object of listObjects(s3)) {
       try {
         if (object.Bucket === undefined) {
@@ -169,9 +179,7 @@ export class DownloadServer {
           await this.deleteObject(object);
           continue;
         }
-
-        // Keep a list of files to send checksum jobs for
-        files.push(file);
+        checkChecksumJob(file);
 
         downloadJobs.push(await this.createDownloadJob(object, part));
       } catch (error) {
@@ -184,9 +192,8 @@ export class DownloadServer {
       }
     }
 
-    for (const file of files) {
-      await this.submitChecksumJob(file);
-      continue;
+    for (const file of await controller.getFilesToVerify()) {
+      checkChecksumJob(file);
     }
 
     this.sendDownloadJobs(downloadJobs);
