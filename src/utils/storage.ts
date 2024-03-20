@@ -67,10 +67,12 @@ async function* listObjectsInBucket(
   do {
     const output = await s3.send(new ListObjectsCommand(input));
     isTruncated = output.IsTruncated ?? false;
-    if (output.NextMarker === undefined) {
-      throw new Error("ListObjectsCommand did not return a marker even though IsTruncated is true");
+    if (isTruncated) {
+      if (output.NextMarker === undefined) {
+        throw new Error("ListObjectsCommand did not return a marker even though IsTruncated is true");
+      }
+      input.Marker = output.NextMarker;
     }
-    input.Marker = output.NextMarker;
     const objects = output.Contents;
     if (objects !== undefined) {
       yield* objects;
