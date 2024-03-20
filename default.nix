@@ -6,7 +6,7 @@ pkgs.buildNpmPackage {
   nativeBuildInputs = with pkgs; [ python3 ];
   nodejs = pkgs.nodejs_21;
 
-  npmDepsHash = "sha256-AMyihfVhB95M7pyPt/0PcBqe8KUlizx1NKJI2Y9kXqg=";
+  npmDepsHash = "sha256-fFDL2Fy//kA3zBGINZOWRST/kM1lwZpBWRkxKBzxTd0=";
 
   meta = with lib; {
     description = "A software for data transfers via the cloud";
