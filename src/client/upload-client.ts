@@ -48,6 +48,12 @@ export const makeUploadClientCommand = () => {
         "Number of concurrent upload threads"
       ).default(availableParallelism())
     )
+    .addOption(
+      new Option(
+        "--num-upload-requests <number>",
+        "Number upload requests per batch"
+      ).default(10)
+    )
     .action(async () => {
       const options = command.opts();
 
@@ -89,8 +95,13 @@ export const makeUploadClientCommand = () => {
         throw new Error(`"numThreads" needs to be a number`);
       }
 
+      const numUploadRequests = parseInt(options["numUploadRequests"], 10);
+      if (typeof numUploadRequests !== "number") {
+        throw new Error(`"numUploadRequests" needs to be a number`);
+      }
+
       const socket = makeClient(endpoint, token);
-      const client = new UploadClient(socket, numThreads);
+      const client = new UploadClient(socket, numThreads, numUploadRequests);
 
       try {
         await client.submitPaths(paths, { minPartSize, maxPartCount });
@@ -112,9 +123,12 @@ class UploadClient {
 
   progress: Progress = new Progress();
 
-  constructor(socket: _ClientSocket, numThreads: number) {
+  numUploadRequests: number;
+
+  constructor(socket: _ClientSocket, numThreads: number, numUploadRequests: number) {
     this.socket = socket;
     this.queue = fastq.promise(this, this.runUploadJob, numThreads);
+    this.numUploadRequests = numUploadRequests;
   }
 
   async retryUploadJob(
@@ -275,7 +289,7 @@ class UploadClient {
         options
       )) {
         uploadRequests.push(uploadRequest);
-        if (uploadRequests.length > 1000) {
+        if (uploadRequests.length > 10) {
           promises.push(this.createUploadJobs(uploadRequests));
           uploadRequests = [];
         }
