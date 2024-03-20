@@ -1,6 +1,6 @@
 {
   "name": "@hippocampusgirl/upload",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "description": "A software for data transfers via the cloud",
   "repository": "https://github.com/HippocampusGirl/upload",
   "main": "build/index.ts",
