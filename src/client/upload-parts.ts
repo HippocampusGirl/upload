@@ -33,7 +33,7 @@ export async function* generateUploadRequests(
   }
   const partSize = Math.ceil(Number(size) / partCount);
 
-  debug("will upload in %d chunks of size %d for %o", partCount, partSize, path);
+  // debug("will upload in %d chunks of size %d for %o", partCount, partSize, path);
 
   for (let i = 0; i < partCount; i++) {
     const start = i * partSize;
