@@ -87,10 +87,12 @@ export class Controller {
           path,
           size,
         });
+      } else if (file.size === null) {
+        await manager.update(File, { bucket, path }, { size });
       } else if (file.size !== size) {
         // Check that the size matches
         throw new Error(
-          `Mismatched size for ${bucket} ${path}: ${file.size} !== ${size}`
+          `Inconsistent size for ${bucket} ${path}: ${file.size} !== ${size}`
         );
       }
       // We need to create a new part
