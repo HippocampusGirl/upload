@@ -292,7 +292,7 @@ class DownloadClient {
         try {
           await this.retryDownloadJob(retryStream, downloadJob);
           resolve(this.finalizeDownloadJob(downloadJob));
-        } finally { }
+        } catch { }
       };
 
       const { url } = downloadJob;

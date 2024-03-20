@@ -170,7 +170,7 @@ class UploadClient {
         try {
           await this.retryUploadJob(retryStream, uploadJob);
           resolve(this.finalizeUploadJob(uploadJob));
-        } finally { }
+        } catch { }
       };
 
       const { url, range } = uploadJob;
@@ -191,9 +191,10 @@ class UploadClient {
     try {
       error = await this.socket.emitWithAck("upload:complete", uploadJob);
       if (error) {
-        debug("error finalizing upload job %o", error);
+        debug("error occurred while finalizing upload job %o: %O", uploadJob, error);
       }
-    } finally {
+    } catch (error) {
+      debug("error sending complete %o", error);
     }
     // debug(
     //   "completed partial upload for %s in range %s",
@@ -216,10 +217,11 @@ class UploadClient {
         checksumSHA256
       );
       if (error) {
-        debug("error submitting checksum %o", error);
+        debug("error submitting checksum job %o: %O", [path, checksumSHA256], error);
         // continue;
       }
-    } finally {
+    } catch (error) {
+      debug("error sending checksum %o", error);
     }
   }
 
