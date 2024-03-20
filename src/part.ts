@@ -14,7 +14,10 @@ export interface Job extends FilePart {
   url: string;
 }
 
-export const parseRange = (value: { range?: any }) => {
+export const parseRange = (value: { range?: { start: number, end: number } | Range }) => {
+  if (!value.range) {
+    return;
+  }
   const { start, end } = value.range;
   value.range = new Range(start, end);
 };

@@ -23,7 +23,7 @@ export class Range {
   }
 }
 
-const byStart = (a: Range, b: Range): number => a.start - b.start;
+const byStart = (a: Range, b: Range): number => Number(a.start - b.start);
 export const reduceRanges = (ranges: Range[]): Range[] =>
   ranges.sort(byStart).reduce((array: Range[], range: Range): Range[] => {
     const previous = array[array.length - 1];
@@ -33,8 +33,12 @@ export const reduceRanges = (ranges: Range[]): Range[] =>
     }
     const { start, end } = range;
     if (previous.touches(range)) {
-      previous.start = Math.min(previous.start, start);
-      previous.end = Math.max(previous.end, end);
+      if (start < previous.start) {
+        previous.start = start;
+      }
+      if (end > previous.end) {
+        previous.end = end;
+      }
     } else {
       array.push(range);
     }

@@ -1,7 +1,7 @@
-import Debug from "debug";
-import { DataSource } from "typeorm";
-import pg from "pg";
 import betterSqlite3 from "better-sqlite3";
+import Debug from "debug";
+import pg from "pg";
+import { DataSource } from "typeorm";
 
 import { File, Part } from "./entity.js";
 
@@ -39,6 +39,7 @@ export const getDataSource = async (
         type: "postgres",
         driver: pg,
         url: connectionString,
+        parseInt8: true,
         ...config,
       }).initialize();
     default:

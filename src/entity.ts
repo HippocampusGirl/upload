@@ -5,12 +5,12 @@ import { Range, reduceRanges } from "./utils/range.js";
 
 @Entity()
 export class Part {
-  @PrimaryColumn("varchar")
+  @PrimaryColumn("varchar", { length: 32 })
   checksumMD5: string;
 
-  @Column("int")
+  @Column("bigint")
   start: number;
-  @Column("int")
+  @Column("bigint")
   end: number;
 
   @Column({ type: "boolean", default: false })
@@ -39,10 +39,10 @@ export class File {
   @PrimaryColumn()
   path: string;
 
-  @Column({ type: "int", nullable: true, default: null })
+  @Column({ type: "bigint", nullable: true, default: null })
   size: number | null;
 
-  @Column({ type: "varchar", nullable: true, default: null })
+  @Column({ type: "varchar", length: 64, nullable: true, default: null })
   checksumSHA256: string | null;
 
   @Column({ type: "boolean", default: false })
