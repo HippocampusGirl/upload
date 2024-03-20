@@ -66,14 +66,19 @@ async function* listObjectsInBucket(
   };
   do {
     const output = await s3.send(new ListObjectsCommand(input));
+    const objects: _Object[] = output.Contents ?? [];
+    const lastObject: _Object | undefined = objects[objects.length - 1];
     isTruncated = output.IsTruncated ?? false;
     if (isTruncated) {
-      if (output.NextMarker === undefined) {
+      // As per https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjects.html#API_ListObjects_ResponseSyntax
+      if (output.NextMarker !== undefined) {
+        input.Marker = output.NextMarker;
+      } else if (lastObject !== undefined && lastObject.Key !== undefined) {
+        input.Marker = lastObject.Key;
+      } else {
         throw new Error("ListObjectsCommand did not return a marker even though IsTruncated is true");
       }
-      input.Marker = output.NextMarker;
     }
-    const objects = output.Contents;
     if (objects !== undefined) {
       yield* objects;
     }
@@ -99,8 +104,12 @@ export async function* listObjects(
   }
   debug("listing %o buckets", buckets.length);
   for (const bucket of buckets) {
-    for await (const object of listObjectsInBucket(s3, bucket)) {
-      yield { ...object, Bucket: bucket };
+    try {
+      for await (const object of listObjectsInBucket(s3, bucket)) {
+        yield { ...object, Bucket: bucket };
+      }
+    } catch (error) {
+      debug("failed to list objects in bucket %s: %o", bucket, error);
     }
   }
 }
