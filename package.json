@@ -14,7 +14,8 @@
   },
   "scripts": {
     "build": "npx tsc",
-    "test": "jest"
+    "test": "jest",
+    "version": "pre-commit run --files package-lock.json || git add default.nix"
   },
   "author": "Lea Waller <lea@lea.science>",
   "license": "GPL-3.0-or-later",
