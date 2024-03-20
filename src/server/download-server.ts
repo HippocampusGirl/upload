@@ -6,10 +6,9 @@ import Joi from "joi";
 import { signedUrlOptions } from "../config.js";
 import {
   getInputFromURL,
-  getPathFromURL,
   getRangeFromPathname
 } from "../download-parse.js";
-import { ChecksumJob, DownloadJob } from "../download-schema.js";
+import { ChecksumJob, DownloadFile, DownloadJob } from "../download-schema.js";
 import { File, Part } from "../entity.js";
 import { _Server, _ServerSocket } from "../socket.js";
 import { _BucketObject, listObjects } from "../utils/storage.js";
@@ -41,22 +40,9 @@ export class DownloadServer {
     );
     socket.on(
       "download:verified",
-      async (downloadJob: DownloadJob, callback: () => void) => {
-        const input = getInputFromURL(downloadJob.url);
-        if (input.Bucket === undefined) {
-          throw new Error('"input.Bucket" is undefined');
-        }
-
-        const { path } = downloadJob;
-        const pathFromURL = getPathFromURL(downloadJob.url);
-        if (path !== pathFromURL) {
-          throw new Error(
-            `Mismatched path between job and upload URL: ` +
-            `${path} != ${pathFromURL}`
-          );
-        }
-
-        await controller.setVerified(input.Bucket, path);
+      async (file: DownloadFile, callback: () => void) => {
+        const { bucket, path } = file;
+        await controller.setVerified(bucket, path);
         callback();
       }
     );
@@ -207,17 +193,13 @@ export class DownloadServer {
 
   async submitChecksumJob(file: File): Promise<void> {
     const io = this.io;
-    const { bucket, path, size, checksumSHA256 } = file;
-    if (size === null) {
-      return;
-    }
+    const { bucket, path, checksumSHA256 } = file;
     if (checksumSHA256 === null) {
       return;
     }
     let checksumJob: ChecksumJob = {
       bucket,
       path,
-      size,
       checksumSHA256,
     };
     debug("sending checksum job", checksumJob);

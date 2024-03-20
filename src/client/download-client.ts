@@ -13,10 +13,9 @@ import { Controller } from "../controller.js";
 import { getDataSource } from "../data-source.js";
 import {
   ChecksumJob,
-  DownloadFilePart,
+  DownloadFile,
   DownloadJob
 } from "../download-schema.js";
-import { File } from "../entity.js";
 import { parseRange } from "../part.js";
 import { endpointSchema, makeClient } from "../socket-client.js";
 import { _ClientSocket } from "../socket.js";
@@ -104,7 +103,7 @@ export const makeDownloadClientCommand = () => {
   return command;
 };
 
-const makePath = (job: DownloadFilePart | ChecksumJob | File): string => {
+const makePath = (job: DownloadFile): string => {
   return join(job.bucket, job.path);
 };
 
@@ -162,10 +161,9 @@ class DownloadClient {
     });
     this.socket.on("download:checksum", async (checksumJob: ChecksumJob) => {
       try {
-        const { bucket, checksumSHA256 } = checksumJob;
-
-        const path = makePath(checksumJob);
+        const { bucket, path, checksumSHA256 } = checksumJob;
         await this.controller.setChecksumSHA256(bucket, path, checksumSHA256);
+        await this.verify(checksumJob);
       } catch (error) {
         debug("failed to process checksum job: %o", error);
       }
@@ -235,14 +233,31 @@ class DownloadClient {
     };
   }
 
-  async verify(file: File): Promise<void> {
+  async verify(job: DownloadFile): Promise<void> {
+    const file = await this.controller.getFile(job.bucket, job.path);
+
+    if (file === null) {
+      return;
+    }
     if (file.verified) {
       return;
     }
-    const path = makePath(file);
+    if (!file.complete) {
+      return;
+    }
+    if (file.checksumSHA256 === null) {
+      return;
+    }
+
+    const path = makePath(job);
     const checksumSHA256 = await calculateChecksum(path, "sha256");
     if (checksumSHA256 === file.checksumSHA256) {
       debug("verified checksum for %s", path);
+      await this.controller.setVerified(file.bucket, file.path);
+      await this.socket.emitWithAck("download:verified", job);
+    }
+
+    if (file.verified) {
       return;
     }
     throw new Error(`Invalid checksum for ${path}: ${checksumSHA256} != ${file.checksumSHA256}`);
@@ -256,23 +271,12 @@ class DownloadClient {
     //   downloadJob.range.toString()
     // );
 
-    const file = await this.controller.completePart(
+    await this.controller.completePart(
       downloadJob.bucket,
       downloadJob
     );
     await this.socket.emitWithAck("download:complete", downloadJob);
-
-    if (file.verified) {
-      return;
-    }
-    if (!file.complete) {
-      return;
-    }
-
-    await this.verify(file);
-
-    await this.controller.setVerified(file.bucket, file.path);
-    await this.socket.emitWithAck("download:verified", downloadJob);
+    await this.verify(downloadJob);
   }
 
   async runDownloadJob(downloadJob: DownloadJob): Promise<void> {

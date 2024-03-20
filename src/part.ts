@@ -6,9 +6,10 @@ export interface _Part {
 }
 export interface _File {
   path: string;
+}
+export interface FilePart extends _Part, _File {
   size: number;
 }
-export interface FilePart extends _Part, _File { }
 export interface Job extends FilePart {
   url: string;
 }
