@@ -143,7 +143,10 @@ export class Controller {
 
   async getFile(bucket: string, path: string): Promise<File | null> {
     return this.submitTransaction(async (manager): Promise<File | null> => {
-      return await manager.findOneBy(File, { bucket, path });
+      return manager.findOne(File, {
+        where: { bucket, path },
+        relations: { parts: true, },
+      });
     });
   }
   async getFilesToVerify(): Promise<File[]> {

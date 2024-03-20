@@ -12,32 +12,49 @@ describe("controller", () => {
         dataSource.synchronize();
     });
 
+    const bucket = "bucket";
+    const path = "path";
+    const checksumMD5 = "checksumMD5";
+    const checksumSHA256 = "checksumSHA256";
+
     it("can add and retrieve part", async () => {
         const controller = new Controller(dataSource);
 
-        const path = "path";
         const range = new Range(0, 10);
-        await controller.addFilePart("bucket", {
-            path,
-            range,
-            checksumMD5: "checksumMD5",
-            size: 100,
+        await controller.addFilePart(bucket, {
+            path, range, checksumMD5, size: 100,
         });
-        const part = await controller.getPart("checksumMD5", range);
-        expect(part).not.toBeNull();
+        const part = await controller.getPart(checksumMD5, range);
+        expect(part).not.toBeFalsy();
         expect(part).toMatchObject({ range });
         expect(part!.file).toMatchObject({ path });
     });
 
-    it("can add and retrieve file"), async () => {
+    it("can add and retrieve file by checksum", async () => {
+        const controller = new Controller(dataSource);
+
+        await controller.setChecksumSHA256(bucket, path, checksumSHA256);
+        const file = await controller.getFile(bucket, path);
+        expect(file).not.toBeFalsy();
+        expect(file).toMatchObject({ path, checksumSHA256 });
+    });
+
+    it("can add and retrieve file by parts", async () => {
         const controller = new Controller(dataSource);
 
         const bucket = "bucket";
         const path = "path";
-        const checksumSHA256 = "checksumSHA256";
-        await controller.setChecksumSHA256(bucket, path, checksumSHA256);
+        const range = new Range(0, 10);
+        await controller.addFilePart(bucket, {
+            path, range, checksumMD5, size: 100,
+        });
+
         const file = await controller.getFile(bucket, path);
         expect(file).not.toBeNull();
-        expect(file).toMatchObject({ path, checksumSHA256 });
-    }
+        const parts = file?.parts;
+        expect(parts).not.toBeFalsy();
+        expect(parts).toHaveLength(1);
+        expect(parts![0]).toMatchObject({ range });
+    });
+
 })

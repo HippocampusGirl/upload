@@ -1,6 +1,6 @@
 import { Column, Entity, ManyToOne, OneToMany, PrimaryColumn } from "typeorm";
-
 import { Relation } from "typeorm/common/RelationType.js";
+
 import { Range, reduceRanges } from "./utils/range.js";
 
 @Entity()
@@ -69,6 +69,9 @@ export class File {
 
   get complete(): boolean {
     if (this.size === undefined || this.checksumSHA256 === undefined) {
+      return false;
+    }
+    if (!this.parts) {
       return false;
     }
     const ranges = reduceRanges(
