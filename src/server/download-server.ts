@@ -16,7 +16,10 @@ const debug = Debug("serve");
 const checksumMD5Schema = Joi.string().required().hex().length(32);
 export class DownloadServer {
   io: _Server;
+
   isLooping: boolean;
+
+  downloads: Set<string> = new Set();
 
   constructor(io: _Server) {
     this.io = io;
@@ -52,6 +55,9 @@ export class DownloadServer {
   startLoop(): void {
     debug("starting loop");
     this.isLooping = true;
+
+    this.downloads.clear();
+
     const loop = this.loop.bind(this);
     setTimeout(loop, 1000);
   }
@@ -164,6 +170,12 @@ export class DownloadServer {
           continue;
         }
         checkChecksumJob(file);
+
+        const key = `${object.Bucket}${object.Key}:${range.toString()}`;
+        if (this.downloads.has(key)) {
+          continue;
+        }
+        this.downloads.add(key);
 
         downloadJobs.push(await this.createDownloadJob(object, part));
       } catch (error) {
