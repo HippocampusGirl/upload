@@ -47,9 +47,9 @@ interface ExtendedWorker {
   [kTaskInfo]?: TaskInfo;
 }
 export class WorkerPool extends EventEmitter {
-  private workers: Worker[] = new Array();
-  private freeWorkers: Worker[] = new Array();
-  private tasks: Task[] = new Array();
+  private workers: Worker[] = [];
+  private freeWorkers: Worker[] = [];
+  private tasks: Task[] = [];
 
   constructor() {
     super();

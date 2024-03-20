@@ -158,7 +158,7 @@ class UploadClient {
   }
 
   async runUploadJob(uploadJob: UploadJob): Promise<CompletedUploadJob> {
-    return new Promise((resolve: (value: Promise<CompletedUploadJob>) => void, reject) => {
+    return new Promise((resolve: (value: Promise<CompletedUploadJob>) => void) => {
       const upload = async (retryStream: Request) => {
         retryStream.once(
           "retry",
@@ -170,9 +170,10 @@ class UploadClient {
         try {
           await this.retryUploadJob(retryStream, uploadJob);
           resolve(this.finalizeUploadJob(uploadJob));
-        } catch { }
+        } catch {
+          // We do not care about this error, as `got` will retry the request
+        }
       };
-
       const { url, range } = uploadJob;
       const writeStream: Request = client.stream.put(url, {
         headers: {
@@ -227,20 +228,14 @@ class UploadClient {
 
   async createUploadJobs(
     uploadRequests: UploadRequest[]
-  ): Promise<any> {
+  ): Promise<unknown> {
     if (uploadRequests.length === 0) {
       // Nothing to do
       return;
     }
-    let results: (UploadJob | UploadCreateError)[];
-    while (true) {
-      try {
-        results = await this.socket.emitWithAck("upload:create", uploadRequests);
-        break;
-      } catch (error) { }
-    }
+    const results: (UploadJob | UploadCreateError)[] = await this.socket.emitWithAck("upload:create", uploadRequests);
 
-    const promises: Promise<any>[] = new Array();
+    const promises: Promise<unknown>[] = [];
     for (const [index, result] of results.entries()) {
       if ("error" in result) {
         const { error } = result;
@@ -267,13 +262,13 @@ class UploadClient {
     }
 
     return Promise.all(promises);
-  };
+  }
 
-  async submitPaths(paths: string[], options: RangeOptions): Promise<any> {
+  async submitPaths(paths: string[], options: RangeOptions): Promise<unknown> {
     const jobs = paths.map(async (path): Promise<void> => {
-      const promises: Promise<void>[] = new Array();
+      const promises: Promise<unknown>[] = [];
 
-      let uploadRequests: UploadRequest[] = new Array();
+      let uploadRequests: UploadRequest[] = [];
       for await (const uploadRequest of generateUploadRequests(
         path,
         this.workerPool,
@@ -282,7 +277,7 @@ class UploadClient {
         uploadRequests.push(uploadRequest);
         if (uploadRequests.length > 1000) {
           promises.push(this.createUploadJobs(uploadRequests));
-          uploadRequests = new Array();
+          uploadRequests = [];
         }
       }
 

@@ -280,7 +280,7 @@ class DownloadClient {
   }
 
   async runDownloadJob(downloadJob: DownloadJob): Promise<void> {
-    return new Promise((resolve: (value: Promise<void>) => void, reject) => {
+    return new Promise((resolve: (value: Promise<void>) => void) => {
       const download = async (retryStream: Request) => {
         retryStream.once(
           "retry",
@@ -292,7 +292,9 @@ class DownloadClient {
         try {
           await this.retryDownloadJob(retryStream, downloadJob);
           resolve(this.finalizeDownloadJob(downloadJob));
-        } catch { }
+        } catch {
+          // We do not care about this error, as `got` will retry the request
+        }
       };
 
       const { url } = downloadJob;

@@ -64,7 +64,7 @@ export class File {
     this.size = size || null;
     this.verified = verified || false;
     this.checksumSHA256 = checksumSHA256 || null;
-    this.parts = parts || new Array();
+    this.parts = parts || [];
   }
 
   get complete(): boolean {

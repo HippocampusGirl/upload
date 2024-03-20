@@ -26,7 +26,7 @@ const checkPart = (
 
 export class Controller {
   dataSource: DataSource;
-  queue: queueAsPromised<(manager: EntityManager) => Promise<any>, any>;
+  queue: queueAsPromised<(manager: EntityManager) => Promise<unknown>, unknown>;
 
   constructor(dataSource: DataSource) {
     this.dataSource = dataSource;
@@ -36,11 +36,11 @@ export class Controller {
   async submitTransaction<T>(
     callback: (manager: EntityManager) => Promise<T>
   ): Promise<T> {
-    return this.queue.push(callback);
+    return this.queue.push(callback) as T;
   }
   async runTransaction(
-    callback: (manager: EntityManager) => Promise<any>
-  ): Promise<any> {
+    callback: (manager: EntityManager) => Promise<unknown>
+  ): Promise<unknown> {
     return this.dataSource.transaction("SERIALIZABLE", callback);
   }
 
@@ -65,7 +65,7 @@ export class Controller {
     const { path, range, checksumMD5, size } = filePart;
     const { start, end } = range;
     return this.submitTransaction(async (manager): Promise<boolean> => {
-      let part: Part | null = await manager.findOne(Part, {
+      const part: Part | null = await manager.findOne(Part, {
         where: { checksumMD5 },
         relations: {
           file: true,
@@ -76,7 +76,7 @@ export class Controller {
         return !part.complete;
       }
 
-      let file: File | null = await manager.findOneBy(File, {
+      const file: File | null = await manager.findOneBy(File, {
         bucket,
         path,
       });

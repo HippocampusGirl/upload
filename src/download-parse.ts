@@ -7,7 +7,7 @@ import { prefix } from "./utils/storage.js";
 import { validate } from "./utils/validate.js";
 
 const getBucketNameFromURL = (url: string): string => {
-  let { hostname } = new URL(url);
+  const { hostname } = new URL(url);
   // Get bucket name
   const bucket = hostname.split(".")[0];
   if (bucket === undefined || !bucket.startsWith(prefix)) {
@@ -36,7 +36,7 @@ export const getRangeFromPathname = (pathname: string): Range => {
   if (suffix === undefined) {
     throw new Error(`Invalid path: ${pathname}`);
   }
-  let [start, end]: (number | undefined)[] = suffix
+  const [start, end]: (number | undefined)[] = suffix
     .split("-")
     .map((n) => parseInt(n, 10));
   if (start === undefined || Number.isNaN(start) || start < 0) {

@@ -1,13 +1,11 @@
-import { DeleteObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import Debug from "debug";
 import Joi from "joi";
 
+import { DeleteObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+
 import { signedUrlOptions } from "../config.js";
-import {
-  getInputFromURL,
-  getRangeFromPathname
-} from "../download-parse.js";
+import { getInputFromURL, getRangeFromPathname } from "../download-parse.js";
 import { ChecksumJob, DownloadFile, DownloadJob } from "../download-schema.js";
 import { File, Part } from "../entity.js";
 import { _Server, _ServerSocket } from "../socket.js";
@@ -46,7 +44,7 @@ export class DownloadServer {
         callback();
       }
     );
-    socket.on("disconnect", (reason) => {
+    socket.on("disconnect", () => {
       this.stopLoop();
     });
   }
@@ -76,7 +74,7 @@ export class DownloadServer {
     object: _BucketObject,
     part: Part
   ): Promise<DownloadJob> {
-    let input = {
+    const input = {
       Bucket: object.Bucket,
       Key: object.Key,
     };
@@ -109,7 +107,7 @@ export class DownloadServer {
 
     const { s3, controller } = this.io;
 
-    let checksums: Set<string> = new Set();
+    const checksums: Set<string> = new Set();
     const checkChecksumJob = async (file: File): Promise<void> => {
       const checksumSHA256 = file.checksumSHA256;
       if (checksumSHA256 !== null) {
@@ -120,7 +118,7 @@ export class DownloadServer {
       }
     };
 
-    let downloadJobs: DownloadJob[] = new Array();
+    let downloadJobs: DownloadJob[] = [];
     for await (const object of listObjects(s3)) {
       try {
         if (object.Bucket === undefined) {
@@ -174,7 +172,7 @@ export class DownloadServer {
 
       if (downloadJobs.length > 1000) {
         this.sendDownloadJobs(downloadJobs);
-        downloadJobs = new Array();
+        downloadJobs = [];
       }
     }
 
@@ -197,7 +195,7 @@ export class DownloadServer {
     if (checksumSHA256 === null) {
       return;
     }
-    let checksumJob: ChecksumJob = {
+    const checksumJob: ChecksumJob = {
       bucket,
       path,
       checksumSHA256,
