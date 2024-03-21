@@ -1,10 +1,8 @@
 import { GetObjectCommandInput } from "@aws-sdk/client-s3";
 
 import { delimiter } from "./config.js";
-import { nameSchema } from "./utils/payload.js";
 import { Range } from "./utils/range.js";
 import { prefix } from "./utils/storage.js";
-import { validate } from "./utils/validate.js";
 
 const getBucketNameFromURL = (url: string): string => {
   const { hostname } = new URL(url);
@@ -21,14 +19,6 @@ const getPathnameFromURL = (url: string): string => {
     pathname = pathname.slice(1);
   }
   return pathname;
-};
-const getNameFromBucket = (bucket: string): string => {
-  if (!bucket.startsWith(prefix)) {
-    throw new Error(`Invalid bucket name: ${bucket}`);
-  }
-  const name = bucket.slice(prefix.length);
-  validate(nameSchema, name);
-  return name;
 };
 export const getRangeFromPathname = (pathname: string): Range => {
   const tokens = pathname.split(delimiter);

@@ -1,9 +1,6 @@
 import { Command, Option } from "commander";
-import Debug from "debug";
 
 import { getDataSource } from "./data-source.js";
-
-const debug = Debug("data-source");
 
 export const makeSynchronizeCommand = (): Command => {
   const command = new Command();

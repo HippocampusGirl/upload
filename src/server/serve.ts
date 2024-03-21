@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { availableParallelism } from "node:os";
 import { Server, Socket } from "socket.io";
-import { DataSource } from "typeorm";
+import msgpackParser from "socket.io-msgpack-parser";
 
 import { S3Client } from "@aws-sdk/client-s3";
 import { createAdapter, setupPrimary } from "@socket.io/cluster-adapter";
@@ -120,7 +120,7 @@ const serve = (
 
   debug(`start worker ${process.pid}`);
 
-  const io: _Server = new Server(httpServer);
+  const io: _Server = new Server(httpServer, { parser: msgpackParser });
   // Cluster adapter
   io.adapter(createAdapter());
   // Connection with the primary process

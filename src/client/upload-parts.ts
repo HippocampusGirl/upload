@@ -1,12 +1,9 @@
-import Debug from "debug";
 import { stat } from "node:fs/promises";
 
 import { delimiter } from "../config.js";
 import { FilePart, Job } from "../part.js";
 import { Range } from "../utils/range.js";
 import { WorkerPool } from "./worker.js";
-
-const debug = Debug("upload-client");
 
 export interface UploadRequest extends FilePart { }
 export interface UploadJob extends Job { }

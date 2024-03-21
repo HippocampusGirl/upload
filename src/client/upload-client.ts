@@ -11,11 +11,11 @@ import { PassThrough } from "node:stream";
 import { pipeline } from "node:stream/promises";
 
 import { parseRange } from "../part.js";
-import { endpointSchema, makeClient } from "../socket-client.js";
 import { _ClientSocket } from "../socket.js";
 import { UploadCreateError } from "../utils/errors.js";
 import { client, requestOptions } from "../utils/http-client.js";
 import { Progress } from "../utils/progress.js";
+import { endpointSchema, makeClient } from "./socket-client.js";
 import {
   generateUploadRequests,
   RangeOptions,

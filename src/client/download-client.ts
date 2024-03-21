@@ -13,12 +13,12 @@ import { Controller } from "../controller.js";
 import { getDataSource } from "../data-source.js";
 import { ChecksumJob, DownloadFile, DownloadJob } from "../download-schema.js";
 import { parseRange } from "../part.js";
-import { endpointSchema, makeClient } from "../socket-client.js";
 import { _ClientSocket } from "../socket.js";
 import { touch } from "../utils/fs.js";
 import { client, requestOptions } from "../utils/http-client.js";
 import { Progress } from "../utils/progress.js";
 import { Range } from "../utils/range.js";
+import { endpointSchema, makeClient } from "./socket-client.js";
 import { WorkerPool } from "./worker.js";
 
 interface CompletedDownloadJob extends DownloadJob {
