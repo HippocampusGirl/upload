@@ -3,14 +3,14 @@ import Debug from "debug";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-import { signedUrlOptions } from "../config.js";
-import { parseRange } from "../part.js";
-import { _Server, _ServerSocket } from "../socket.js";
 import {
   makeSuffix,
   UploadJob,
   UploadRequest
 } from "../client/upload-parts.js";
+import { signedUrlOptions } from "../config.js";
+import { parseRange } from "../part.js";
+import { _Server, _ServerSocket } from "../socket.js";
 import { UploadCreateError } from "../utils/errors.js";
 
 const debug = Debug("serve");
@@ -23,8 +23,8 @@ export class UploadServer {
   }
 
   listen(socket: _ServerSocket) {
-    const { s3, controller } = this.io;
-    const { bucket } = socket;
+    const { controller } = this.io;
+    const { s3, bucket } = socket;
 
     const getUploadJob = async (
       uploadRequest: UploadRequest

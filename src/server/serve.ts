@@ -16,7 +16,7 @@ import { Controller } from "../controller.js";
 import { getDataSource } from "../data-source.js";
 import { _Server } from "../socket.js";
 import { UnauthorizedError } from "../utils/errors.js";
-import { Payload } from "../utils/payload.js";
+import { Payload, UploadPayload } from "../utils/payload.js";
 import { makeS3Client, requireBucketName } from "../utils/storage.js";
 import { DownloadServer } from "./download-server.js";
 import { UploadServer } from "./upload-server.js";
@@ -29,9 +29,9 @@ declare module "socket.io" {
 interface ExtendedSocket {
   bucket: string;
   payload: Payload;
+  s3: S3Client;
 }
 interface ExtendedServer {
-  s3: S3Client;
   controller: Controller;
 }
 
@@ -127,7 +127,6 @@ const serve = (
   sticky.setupWorker(io);
 
   // Set up socket.io
-  io.s3 = makeS3Client();
   io.controller = controller;
 
   // Handle authorization
@@ -153,12 +152,23 @@ const serve = (
       return next(new UnauthorizedError("Invalid token payload"));
     }
 
-    const { type, name, loc } = payload as Payload;
-    socket.payload = { type, name };
-    socket.bucket = await requireBucketName(io.s3, name, loc);
+    const { controller } = io;
 
-    socket.join(type);
+    const { t } = payload as Payload;
+    if (t === "u") {
+      const { n, s } = payload as UploadPayload;
+      const storageProvider = await controller.getStorageProvider(s);
+      if (storageProvider === null) {
+        return next(new UnauthorizedError("Invalid token storage provider"));
+      }
+      socket.s3 = makeS3Client(storageProvider);
+      socket.bucket = await requireBucketName(socket.s3, n);
+      socket.payload = { t, n, s };
+    } else if (t === "d") {
+      socket.payload = { t };
+    }
 
+    socket.join(t);
     return next();
   });
 
@@ -166,11 +176,11 @@ const serve = (
   const uploadServer: UploadServer = new UploadServer(io);
 
   io.on("connection", (socket: Socket) => {
-    switch (socket.payload.type) {
-      case "download":
+    switch (socket.payload.t) {
+      case "d": // Download
         downloadServer.listen(socket);
         break;
-      case "upload":
+      case "u": // Upload
         uploadServer.listen(socket);
         break;
     }

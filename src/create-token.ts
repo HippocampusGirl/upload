@@ -10,9 +10,9 @@ export const makeCreateTokenCommand = (): Command => {
   command
     .name(`create-token`)
     .showHelpAfterError()
-    .requiredOption("--name <value>", "Where the server is located")
-    .requiredOption("--type <value>", "Token to authenticate with the server")
-    .option("--loc <value>", "Location hint for the cloud provider")
+    .requiredOption("--name <value>", "Name for the token")
+    .requiredOption("--type <value>", "Whether the token will be valid for uploads or downloads")
+    .requiredOption("--storage-id <value>", "Which cloud provider to use")
     .requiredOption(
       "--private-key-file <path>",
       "Path to the private key file generated with `openssl ecparam -name prime256v1 -genkey`"
@@ -21,9 +21,15 @@ export const makeCreateTokenCommand = (): Command => {
       const options = command.opts();
 
       const name = options["name"];
-      const type = options["type"];
-      const loc = options["loc"];
-      const payload: Payload = { name, type, loc };
+      const mapping: { [key: string]: "u" | "d" } = { upload: "u", download: "d" };
+      const n = mapping[name];
+      if (!n) {
+        throw new Error("Name must be 'upload' or 'download'");
+      }
+
+      const t = options["type"];
+      const s = options["storageId"];
+      const payload: Payload = { n, t, s };
 
       const privateKeyFile = options["privateKeyFile"];
       if (typeof privateKeyFile !== "string") {
@@ -38,7 +44,7 @@ export const makeCreateTokenCommand = (): Command => {
   return command;
 };
 
-const createToken = (payload: any, privateKey: string): string => {
+const createToken = (payload: string | object, privateKey: string): string => {
   payload = validate(payloadSchema, payload);
   const token = jwt.sign(payload, privateKey, { algorithm: "ES256" });
   return token;

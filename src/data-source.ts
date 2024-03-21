@@ -3,7 +3,7 @@ import Debug from "debug";
 import pg from "pg";
 import { DataSource } from "typeorm";
 
-import { File, Part } from "./entity.js";
+import { File, Part, StorageProvider } from "./entity.js";
 
 const debug = Debug("data-source");
 export const getDataSource = async (
@@ -14,7 +14,7 @@ export const getDataSource = async (
   const config = {
     logging,
     synchronize: false,
-    entities: [File, Part],
+    entities: [File, Part, StorageProvider],
     subscribers: [],
     migrations: [],
     entitySkipConstructor: true,

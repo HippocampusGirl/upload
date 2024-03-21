@@ -22,7 +22,7 @@ export const client = got.extend({
       },
     ],
     afterResponse: [
-      (response, retryWithMergedOptions) => {
+      (response) => {
         debug(`${response.statusCode} ${response.statusMessage}`);
         return response;
       },

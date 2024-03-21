@@ -2,7 +2,7 @@ import Joi from "joi";
 
 import { ValidationError } from "./errors.js";
 
-export const validate = (schema: Joi.Schema, value: any): any => {
+export const validate = <T>(schema: Joi.Schema, value: T): T => {
   const { error, value: validated } = schema.validate(value);
   if (error !== undefined) {
     let message = error.message;

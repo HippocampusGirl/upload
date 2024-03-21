@@ -1,7 +1,7 @@
 import fastq, { queueAsPromised } from "fastq";
 import { DataSource, EntityManager, IsNull, Not } from "typeorm";
 
-import { File, Part } from "./entity.js";
+import { File, Part, StorageProvider } from "./entity.js";
 import { FilePart } from "./part.js";
 import { Range } from "./utils/range.js";
 
@@ -167,5 +167,12 @@ export class Controller {
         throw new Error(`File not found for ${bucket} ${path}`);
       }
     });
+  }
+
+  async getStorageProvider(id: string): Promise<StorageProvider | null> {
+    return this.dataSource.manager.findOneBy(StorageProvider, { id });
+  }
+  async getStorageProviders(): Promise<StorageProvider[]> {
+    return this.dataSource.manager.find(StorageProvider);
   }
 }

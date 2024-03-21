@@ -12,26 +12,29 @@ import {
   S3Client
 } from "@aws-sdk/client-s3";
 
-import { getS3Config } from "../config.js";
-import { CloudflareBucketLocationConstraint } from "./payload.js";
+import { StorageProvider } from "../entity.js";
+
+// Allow socket to store payload
+declare module "@aws-sdk/client-s3" {
+  interface S3Client extends ExtendedS3Client { }
+}
+interface ExtendedS3Client {
+  bucketLocationConstraint: string | null;
+}
 
 const debug = Debug("storage");
-
 export const prefix = "upload-";
 
-export const makeS3Client = (): S3Client => {
-  const { endpoint, accessKeyId, secretAccessKey } = getS3Config();
-  return new S3Client({
-    region: "auto",
-    endpoint: `https://${endpoint}`,
-    credentials: { accessKeyId, secretAccessKey },
-  });
-};
+
+export const makeS3Client = (storageProvider: StorageProvider): S3Client => {
+  const s3 = new S3Client(storageProvider.configuration);
+  s3.bucketLocationConstraint = storageProvider.bucketLocationConstraint;
+  return s3;
+}
 
 export const requireBucketName = async (
   s3: S3Client,
-  name: string,
-  loc: CloudflareBucketLocationConstraint | undefined
+  name: string
 ): Promise<string> => {
   const bucket = `${prefix}${name}`;
   const bucketInput = { Bucket: bucket };
@@ -41,9 +44,9 @@ export const requireBucketName = async (
   } catch (error) {
     try {
       const input: CreateBucketCommandInput = { ...bucketInput };
-      if (loc !== undefined) {
+      if (s3.bucketLocationConstraint) {
         input.CreateBucketConfiguration = {
-          LocationConstraint: loc as BucketLocationConstraint,
+          LocationConstraint: s3.bucketLocationConstraint as BucketLocationConstraint,
         };
       }
       await s3.send(new CreateBucketCommand(input));

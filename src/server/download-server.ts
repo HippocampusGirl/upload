@@ -1,22 +1,25 @@
 import Debug from "debug";
 import Joi from "joi";
 
-import { DeleteObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  S3Client
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 import { signedUrlOptions } from "../config.js";
 import { getInputFromURL, getRangeFromPathname } from "../download-parse.js";
 import { ChecksumJob, DownloadFile, DownloadJob } from "../download-schema.js";
-import { File, Part } from "../entity.js";
+import { File, Part, StorageProvider } from "../entity.js";
 import { _Server, _ServerSocket } from "../socket.js";
-import { _BucketObject, listObjects } from "../utils/storage.js";
+import { _BucketObject, listObjects, makeS3Client } from "../utils/storage.js";
 
 const debug = Debug("serve");
 
 const checksumMD5Schema = Joi.string().required().hex().length(32);
 export class DownloadServer {
   io: _Server;
-
   isLooping: boolean;
 
   downloads: Set<string> = new Set();
@@ -30,7 +33,9 @@ export class DownloadServer {
   listen(socket: _ServerSocket) {
     this.startLoop();
 
-    const { s3, controller } = this.io;
+    const { controller } = this.io;
+    const { s3 } = socket;
+
     socket.on(
       "download:complete",
       async (downloadJob: DownloadJob, callback: () => void) => {
@@ -67,7 +72,12 @@ export class DownloadServer {
       return;
     }
 
-    await this.checkDownloadJobs();
+    debug("checking for new download jobs");
+    const storageProviders = await this.io.controller.getStorageProviders();
+    await Promise.all(storageProviders.map(async (storageProvider: StorageProvider) => {
+      const s3 = makeS3Client(storageProvider);
+      return this.checkDownloadJobs(s3);
+    }));
 
     const loop = this.loop.bind(this);
     setTimeout(loop, 1 * 60 * 1000); // 1 minute
@@ -77,6 +87,7 @@ export class DownloadServer {
   }
 
   async createDownloadJob(
+    s3: S3Client,
     object: _BucketObject,
     part: Part
   ): Promise<DownloadJob> {
@@ -85,7 +96,7 @@ export class DownloadServer {
       Key: object.Key,
     };
     const url = await getSignedUrl(
-      this.io.s3,
+      s3,
       new GetObjectCommand(input),
       signedUrlOptions
     );
@@ -100,18 +111,16 @@ export class DownloadServer {
     debug("created download job %o", downloadJob);
     return downloadJob;
   }
-  async deleteObject(object: _BucketObject): Promise<void> {
-    await this.io.s3.send(
+  async deleteObject(s3: S3Client, object: _BucketObject): Promise<void> {
+    await s3.send(
       new DeleteObjectCommand({
         Bucket: object.Bucket,
         Key: object.Key,
       })
     );
   }
-  async checkDownloadJobs(): Promise<void> {
-    debug("checking for new download jobs");
-
-    const { s3, controller } = this.io;
+  async checkDownloadJobs(s3: S3Client): Promise<void> {
+    const { controller } = this.io;
 
     const checksums: Set<string> = new Set();
     const checkChecksumJob = async (file: File): Promise<void> => {
@@ -145,7 +154,7 @@ export class DownloadServer {
           range = getRangeFromPathname(object.Key);
         } catch (error) {
           debug("deleting unknown file %o because the range could not be parsed: %O", object.Key, error);
-          await this.deleteObject(object);
+          await this.deleteObject(s3, object);
           continue;
         }
         if (range.size() !== object.Size) {
@@ -160,13 +169,13 @@ export class DownloadServer {
         const part = await controller.getPart(checksumMD5, range);
         if (part === null) {
           debug("deleting unknown file %o with checksum %o and range from %o to %o", object.Key, checksumMD5, range.start, range.end);
-          await this.deleteObject(object);
+          await this.deleteObject(s3, object);
           continue;
         }
         const file = part.file;
         if (file.verified) {
           debug("deleting already verified part %o", object.Key);
-          await this.deleteObject(object);
+          await this.deleteObject(s3, object);
           continue;
         }
         checkChecksumJob(file);
@@ -177,7 +186,7 @@ export class DownloadServer {
         }
         this.downloads.add(key);
 
-        downloadJobs.push(await this.createDownloadJob(object, part));
+        downloadJobs.push(await this.createDownloadJob(s3, object, part));
       } catch (error) {
         debug("could not parse object %o: %O", object, error);
       }

@@ -1,11 +1,13 @@
 import { Column, Entity, ManyToOne, OneToMany, PrimaryColumn } from "typeorm";
 import { Relation } from "typeorm/common/RelationType.js";
 
+import { S3ClientConfig } from "@aws-sdk/client-s3";
+
 import { Range, reduceRanges } from "./utils/range.js";
 
 @Entity()
 export class Part {
-  @PrimaryColumn("varchar", { length: 32 })
+  @PrimaryColumn("varchar")
   checksumMD5: string;
 
   @Column("bigint")
@@ -19,12 +21,16 @@ export class Part {
   @ManyToOne(() => File, (file) => file.parts)
   file: Relation<File>;
 
-  constructor({ checksumMD5, start, end, complete, file }: Partial<Part>) {
+  @ManyToOne(() => StorageProvider, (storageProvider) => storageProvider.parts)
+  storageProvider: Relation<StorageProvider>;
+
+  constructor({ checksumMD5, start, end, complete, file, storageProvider }: Partial<Part>) {
     this.checksumMD5 = checksumMD5!;
     this.start = start!;
     this.end = end!;
     this.complete = complete || false;
     this.file = file!;
+    this.storageProvider = storageProvider!;
   }
 
   get range(): Range {
@@ -42,7 +48,7 @@ export class File {
   @Column({ type: "bigint", nullable: true, default: null })
   size: number | null;
 
-  @Column({ type: "varchar", length: 64, nullable: true, default: null })
+  @Column({ type: "varchar", nullable: true, default: null })
   checksumSHA256: string | null;
 
   @Column({ type: "boolean", default: false })
@@ -86,5 +92,55 @@ export class File {
     const { start } = range;
     const complete = start == 0 && range.size() == this.size;
     return complete;
+  }
+}
+
+@Entity()
+export class StorageProvider {
+  @PrimaryColumn("varchar")
+  id: string
+
+  @Column("varchar")
+  endpoint: string;
+  @Column("varchar")
+  region: string;
+  @Column("varchar")
+  accessKeyId: string;
+  @Column("varchar")
+  secretAccessKey: string;
+
+  @Column("varchar", { nullable: true, default: null })
+  bucketLocationConstraint: string | null;
+
+  @OneToMany(() => Part, (part) => part.storageProvider)
+  parts: Part[];
+
+  constructor({
+    id,
+    endpoint,
+    region,
+    accessKeyId,
+    secretAccessKey,
+    bucketLocationConstraint,
+    parts,
+  }: Partial<Storage>) {
+    this.id = id!;
+    this.endpoint = endpoint!;
+    this.region = region!;
+    this.accessKeyId = accessKeyId!;
+    this.secretAccessKey = secretAccessKey!;
+    this.bucketLocationConstraint = bucketLocationConstraint || null;
+    this.parts = parts || [];
+  }
+
+  get configuration(): S3ClientConfig {
+    return {
+      endpoint: this.endpoint,
+      region: this.region,
+      credentials: {
+        accessKeyId: this.accessKeyId,
+        secretAccessKey: this.secretAccessKey,
+      }
+    };
   }
 }
