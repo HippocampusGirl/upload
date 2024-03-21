@@ -16,4 +16,8 @@ interface UnknownError {
 interface UploadCreateExistsError {
   error: "upload-exists";
 }
+interface StorageProviderError {
+  error: "unknown-storage-provider";
+}
 export type UploadCreateError = UploadCreateExistsError | UnknownError;
+export type DownloadCompleteError = StorageProviderError | UnknownError;

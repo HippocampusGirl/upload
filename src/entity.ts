@@ -1,5 +1,5 @@
 import { Column, Entity, ManyToOne, OneToMany, PrimaryColumn } from "typeorm";
-import { Relation } from "typeorm/common/RelationType.js";
+import type { Relation } from "typeorm/common/RelationType.js";
 
 import { S3ClientConfig } from "@aws-sdk/client-s3";
 
@@ -24,7 +24,14 @@ export class Part {
   @ManyToOne(() => StorageProvider, (storageProvider) => storageProvider.parts)
   storageProvider: Relation<StorageProvider>;
 
-  constructor({ checksumMD5, start, end, complete, file, storageProvider }: Partial<Part>) {
+  constructor({
+    checksumMD5,
+    start,
+    end,
+    complete,
+    file,
+    storageProvider,
+  }: Partial<Part>) {
     this.checksumMD5 = checksumMD5!;
     this.start = start!;
     this.end = end!;
@@ -81,9 +88,7 @@ export class File {
       return false;
     }
     const ranges = reduceRanges(
-      this.parts
-        .filter(({ complete }) => complete)
-        .map(({ range }) => range)
+      this.parts.filter(({ complete }) => complete).map(({ range }) => range)
     );
     const range = ranges[0];
     if (range === undefined) {
@@ -98,7 +103,7 @@ export class File {
 @Entity()
 export class StorageProvider {
   @PrimaryColumn("varchar")
-  id: string
+  id: string;
 
   @Column("varchar")
   endpoint: string;
@@ -140,7 +145,7 @@ export class StorageProvider {
       credentials: {
         accessKeyId: this.accessKeyId,
         secretAccessKey: this.secretAccessKey,
-      }
+      },
     };
   }
 }

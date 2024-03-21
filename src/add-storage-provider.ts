@@ -1,7 +1,7 @@
-import { Command, Option } from "commander";
+import { Command, Option } from 'commander';
 
-import { getDataSource } from "./data-source.js";
-import { StorageProvider } from "./entity.js";
+import { getDataSource } from './data-source.js';
+import { StorageProvider } from './entity.js';
 
 export const makeAddStorageProviderCommand = (): Command => {
   const command = new Command();
@@ -16,13 +16,11 @@ export const makeAddStorageProviderCommand = (): Command => {
       "--connection-string <path>",
       "Connection string to the database"
     )
-    .requiredOption(
-      "--id <string>",
-      "A unique identifier"
-    )
+    .requiredOption("--id <string>", "A unique identifier")
+    .requiredOption("--endpoint <string>", "The endpoint to connect to")
     .requiredOption(
       "--region <string>",
-      "The region that will be used to initialize the S3Client"
+      "The region where the program will upload to"
     )
     .requiredOption(
       "--accessKeyId <string>",
@@ -49,8 +47,8 @@ export const makeAddStorageProviderCommand = (): Command => {
         region: options["region"],
         accessKeyId: options["accessKeyId"],
         secretAccessKey: options["secretAccessKey"],
-        endpoint: "https://s3.amazonaws.com",
-        bucketLocationConstraint: options["bucketLocationConstraint"]
+        endpoint: options["endpoint"],
+        bucketLocationConstraint: options["bucketLocationConstraint"],
       });
       await dataSource.manager.save(storageProvider);
     });

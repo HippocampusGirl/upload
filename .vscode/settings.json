@@ -1,15 +1,19 @@
 {
+  "editor.formatOnSave": true,
+  "importSorter.generalConfiguration.sortOnBeforeSave": true,
+  "importSorter.importStringConfiguration.quoteMark": "double",
+  "eslint.lintTask.enable": true,
+  "eslint.options": {
+    "overrideConfigFile": "eslint.config.json"
+  },
+  "typescript.format.enable": true,
+  "typescript.preferences.quoteStyle": "double",
+  "typescript.preferences.importModuleSpecifier": "relative",
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
     "editor.formatOnSave": true,
-    "importSorter.generalConfiguration.sortOnBeforeSave": true,
-    "importSorter.importStringConfiguration.maximumNumberOfImportExpressionsPerLine.type": "newLineEachExpressionAfterCountLimitExceptIfOnlyOne",
-    "importSorter.importStringConfiguration.maximumNumberOfImportExpressionsPerLine.count": 80,
-    "importSorter.importStringConfiguration.tabSize": 2,
-    "importSorter.importStringConfiguration.quoteMark": "double",
-    "files.exclude": {
-        "upload.cjs": true,
-    },
-    "eslint.lintTask.enable": true,
-    "eslint.options": {
-        "overrideConfigFile": "eslint.config.json"
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "always"
     }
+  }
 }

@@ -1,21 +1,19 @@
 import Debug from "debug";
 import Joi from "joi";
 
-import {
-  DeleteObjectCommand,
-  GetObjectCommand,
-  S3Client
-} from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
+import { makeKey } from "../client/upload-parts.js";
 import { signedUrlOptions } from "../config.js";
-import { getInputFromURL, getRangeFromPathname } from "../download-parse.js";
 import { ChecksumJob, DownloadFile, DownloadJob } from "../download-schema.js";
 import { File, Part, StorageProvider } from "../entity.js";
 import { _Server, _ServerSocket } from "../socket.js";
+import { DownloadCompleteError } from "../utils/errors.js";
 import { _BucketObject, listObjects, makeS3Client } from "../utils/storage.js";
+import { getRangeFromPathname } from "./download-parse.js";
 
-const debug = Debug("serve");
+const debug = Debug("server");
 
 const checksumMD5Schema = Joi.string().required().hex().length(32);
 export class DownloadServer {
@@ -26,7 +24,6 @@ export class DownloadServer {
 
   constructor(io: _Server) {
     this.io = io;
-
     this.isLooping = false;
   }
 
@@ -34,14 +31,37 @@ export class DownloadServer {
     this.startLoop();
 
     const { controller } = this.io;
-    const { s3 } = socket;
 
     socket.on(
       "download:complete",
-      async (downloadJob: DownloadJob, callback: () => void) => {
-        const input = getInputFromURL(downloadJob.url);
-        await s3.send(new DeleteObjectCommand(input));
-        callback();
+      async (
+        downloadJob: DownloadJob,
+        callback: (u: DownloadCompleteError | undefined) => void
+      ) => {
+        const storageProvider = await controller.getStorageProvider(
+          downloadJob.storageProviderId
+        );
+        if (storageProvider === null) {
+          callback({ error: "unknown-storage-provider" });
+          return;
+        }
+        const s3 = makeS3Client(storageProvider);
+        try {
+          await s3.send(
+            new DeleteObjectCommand({
+              Bucket: downloadJob.bucket,
+              Key: makeKey(downloadJob),
+            })
+          );
+        } catch (error) {
+          debug(
+            "could not delete part %o from storage provider: %O",
+            downloadJob,
+            error
+          );
+          callback({ error: "unknown" });
+        }
+        callback(undefined);
       }
     );
     socket.on(
@@ -74,10 +94,7 @@ export class DownloadServer {
 
     debug("checking for new download jobs");
     const storageProviders = await this.io.controller.getStorageProviders();
-    await Promise.all(storageProviders.map(async (storageProvider: StorageProvider) => {
-      const s3 = makeS3Client(storageProvider);
-      return this.checkDownloadJobs(s3);
-    }));
+    await Promise.all(storageProviders.map(this.checkDownloadJobs, this));
 
     const loop = this.loop.bind(this);
     setTimeout(loop, 1 * 60 * 1000); // 1 minute
@@ -87,6 +104,7 @@ export class DownloadServer {
   }
 
   async createDownloadJob(
+    storageProviderId: string,
     s3: S3Client,
     object: _BucketObject,
     part: Part
@@ -101,6 +119,7 @@ export class DownloadServer {
       signedUrlOptions
     );
     const downloadJob: DownloadJob = {
+      storageProviderId,
       bucket: object.Bucket,
       url,
       range: part.range,
@@ -119,8 +138,9 @@ export class DownloadServer {
       })
     );
   }
-  async checkDownloadJobs(s3: S3Client): Promise<void> {
+  async checkDownloadJobs(storageProvider: StorageProvider): Promise<void> {
     const { controller } = this.io;
+    const s3 = makeS3Client(storageProvider);
 
     const checksums: Set<string> = new Set();
     const checkChecksumJob = async (file: File): Promise<void> => {
@@ -153,40 +173,54 @@ export class DownloadServer {
         try {
           range = getRangeFromPathname(object.Key);
         } catch (error) {
-          debug("deleting unknown file %o because the range could not be parsed: %O", object.Key, error);
+          debug(
+            "deleting unknown file %o because the range could not be parsed: %O",
+            object.Key,
+            error
+          );
           await this.deleteObject(s3, object);
           continue;
         }
         if (range.size() !== object.Size) {
           throw new Error(
             "Mismatched size between object and range in file name: " +
-            `${object.Size} != ${range.size()}`
+              `${object.Size} != ${range.size()}`
           );
         }
 
-        const checksumMD5 = object.ETag.replaceAll("\"", "");
+        const checksumMD5 = object.ETag.replaceAll('"', "");
         Joi.assert(checksumMD5, checksumMD5Schema);
         const part = await controller.getPart(checksumMD5, range);
         if (part === null) {
-          debug("deleting unknown file %o with checksum %o and range from %o to %o", object.Key, checksumMD5, range.start, range.end);
+          debug(
+            "deleting unknown file %o with checksum %o and range from %o to %o",
+            object.Key,
+            checksumMD5,
+            range.start,
+            range.end
+          );
           await this.deleteObject(s3, object);
           continue;
         }
         const file = part.file;
         if (file.verified) {
-          debug("deleting already verified part %o", object.Key);
+          debug("deleting part of verified file %o", object.Key);
           await this.deleteObject(s3, object);
           continue;
         }
         checkChecksumJob(file);
 
-        const key = `${object.Bucket}${object.Key}:${range.toString()}`;
+        const key = `${storageProvider.id}:${object.Bucket}:${
+          object.Key
+        }:${range.toString()}`;
         if (this.downloads.has(key)) {
           continue;
         }
         this.downloads.add(key);
 
-        downloadJobs.push(await this.createDownloadJob(s3, object, part));
+        downloadJobs.push(
+          await this.createDownloadJob(storageProvider.id, s3, object, part)
+        );
       } catch (error) {
         debug("could not parse object %o: %O", object, error);
       }

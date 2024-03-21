@@ -6,7 +6,7 @@ import msgpackParser from "socket.io-msgpack-parser";
 import { _ClientSocket } from "../socket.js";
 import { getHttpsProxyAgent } from "../utils/proxy.js";
 
-const debug = Debug("socket-client");
+const debug = Debug("client");
 
 export const endpointSchema = Joi.string().uri({
   scheme: ["http", "https", "ws", "wss"],
@@ -16,7 +16,7 @@ export const makeClient = (endpoint: string, token: string): _ClientSocket => {
     auth: { token },
     ackTimeout: 5000, // 5 seconds
     retries: 100,
-    parser: msgpackParser
+    parser: msgpackParser,
   };
 
   const agent = getHttpsProxyAgent();
@@ -27,7 +27,7 @@ export const makeClient = (endpoint: string, token: string): _ClientSocket => {
   const socket = io(endpoint, options);
 
   socket.on("connect_error", (error) => {
-    debug(`Failed to connect to server: ${error.message}`);
+    debug("failed to connect to server: %o", error.message);
   });
 
   return socket;

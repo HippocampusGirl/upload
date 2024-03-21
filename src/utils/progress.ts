@@ -12,6 +12,10 @@ export class Progress {
 
   constructor() {}
 
+  terminate() {
+    this.gauge.disable();
+  }
+
   addPart(part: _Part): void {
     this.total += part.range.size();
     this.update();

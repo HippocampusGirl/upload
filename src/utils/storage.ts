@@ -1,22 +1,15 @@
-import Debug from "debug";
+import Debug from 'debug';
 
 import {
-  _Object,
-  BucketLocationConstraint,
-  CreateBucketCommand,
-  CreateBucketCommandInput,
-  HeadBucketCommand,
-  ListBucketsCommand,
-  ListObjectsCommand,
-  ListObjectsCommandInput,
-  S3Client
-} from "@aws-sdk/client-s3";
+    _Object, BucketLocationConstraint, CreateBucketCommand, CreateBucketCommandInput,
+    HeadBucketCommand, ListBucketsCommand, ListObjectsCommand, ListObjectsCommandInput, S3Client
+} from '@aws-sdk/client-s3';
 
-import { StorageProvider } from "../entity.js";
+import { StorageProvider } from '../entity.js';
 
 // Allow socket to store payload
 declare module "@aws-sdk/client-s3" {
-  interface S3Client extends ExtendedS3Client { }
+  interface S3Client extends ExtendedS3Client {}
 }
 interface ExtendedS3Client {
   bucketLocationConstraint: string | null;
@@ -25,12 +18,14 @@ interface ExtendedS3Client {
 const debug = Debug("storage");
 export const prefix = "upload-";
 
-
 export const makeS3Client = (storageProvider: StorageProvider): S3Client => {
-  const s3 = new S3Client(storageProvider.configuration);
+  const s3 = new S3Client({
+    forcePathStyle: true,
+    ...storageProvider.configuration,
+  });
   s3.bucketLocationConstraint = storageProvider.bucketLocationConstraint;
   return s3;
-}
+};
 
 export const requireBucketName = async (
   s3: S3Client,
@@ -42,16 +37,17 @@ export const requireBucketName = async (
   try {
     await s3.send(new HeadBucketCommand(bucketInput));
   } catch (error) {
+    const input: CreateBucketCommandInput = { ...bucketInput };
+    if (s3.bucketLocationConstraint) {
+      input.CreateBucketConfiguration = {
+        LocationConstraint:
+          s3.bucketLocationConstraint as BucketLocationConstraint,
+      };
+    }
     try {
-      const input: CreateBucketCommandInput = { ...bucketInput };
-      if (s3.bucketLocationConstraint) {
-        input.CreateBucketConfiguration = {
-          LocationConstraint: s3.bucketLocationConstraint as BucketLocationConstraint,
-        };
-      }
       await s3.send(new CreateBucketCommand(input));
     } catch (error) {
-      debug(error);
+      debug("failed to create bucket with input %o: %O", input, error);
       throw new Error("Failed to create bucket");
     }
   }
@@ -79,7 +75,9 @@ async function* listObjectsInBucket(
       } else if (lastObject !== undefined && lastObject.Key !== undefined) {
         input.Marker = lastObject.Key;
       } else {
-        throw new Error("ListObjectsCommand did not return a marker even though IsTruncated is true");
+        throw new Error(
+          "ListObjectsCommand did not return a marker even though IsTruncated is true"
+        );
       }
     }
     if (objects !== undefined) {

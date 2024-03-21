@@ -1,10 +1,11 @@
 import Debug from "debug";
-import { Agents, got, OptionsInit, RequestError } from "got";
+import type { Agents, OptionsInit, RequestError } from "got";
+import { got } from "got";
 import { Agent } from "node:https";
 
 import { getHttpsProxyAgent } from "./proxy.js";
 
-const debug = Debug("got");
+const debug = Debug("http-client");
 
 const agent: Agents = {};
 

@@ -3,10 +3,13 @@ import { Socket as ClientSocket } from "socket.io-client";
 
 import { UploadJob, UploadRequest } from "./client/upload-parts.js";
 import { ChecksumJob, DownloadFile, DownloadJob } from "./download-schema.js";
-import { UploadCreateError } from "./utils/errors.js";
+import { DownloadCompleteError, UploadCreateError } from "./utils/errors.js";
 
 interface ClientToServerEvents {
-  "download:complete": (downloadJob: DownloadJob, callback: () => void) => void;
+  "download:complete": (
+    downloadJob: DownloadJob,
+    callback: (u: DownloadCompleteError | undefined) => void
+  ) => void;
   "download:verified": (file: DownloadFile, callback: () => void) => void;
   "upload:create": (
     uploadRequests: UploadRequest[],
@@ -28,8 +31,8 @@ interface ServerToClientEvents {
   "download:checksum": (checksumJob: ChecksumJob) => void;
 }
 
-interface ServerSideEvents { }
-interface SocketData { }
+interface ServerSideEvents {}
+interface SocketData {}
 
 export type _Server = Server<
   ClientToServerEvents,

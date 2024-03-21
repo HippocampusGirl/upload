@@ -5,8 +5,8 @@ import { FilePart, Job } from "../part.js";
 import { Range } from "../utils/range.js";
 import { WorkerPool } from "./worker.js";
 
-export interface UploadRequest extends FilePart { }
-export interface UploadJob extends Job { }
+export interface UploadRequest extends FilePart {}
+export interface UploadJob extends Job {}
 
 export interface RangeOptions {
   minPartSize: number;
@@ -50,7 +50,7 @@ export async function* generateUploadRequests(
   }
 }
 
-export const makeSuffix = (uploadRequest: UploadRequest): string => {
+const makeSuffix = (uploadRequest: UploadRequest): string => {
   const { size, range } = uploadRequest;
   const digits = size.toString(10).length;
 
@@ -58,4 +58,8 @@ export const makeSuffix = (uploadRequest: UploadRequest): string => {
     n.toString(10).padStart(digits, "0")
   );
   return `${delimiter}${start}-${end}`;
+};
+export const makeKey = (uploadRequest: UploadRequest): string => {
+  const suffix = makeSuffix(uploadRequest);
+  return `${uploadRequest.path}${suffix}`;
 };

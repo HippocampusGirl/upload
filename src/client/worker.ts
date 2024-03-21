@@ -2,13 +2,16 @@ import Debug from "debug";
 import { AsyncResource } from "node:async_hooks";
 import EventEmitter from "node:events";
 import { availableParallelism } from "node:os";
+import { dirname, extname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { parentPort, Worker } from "node:worker_threads";
 
 import { parseRange } from "../part.js";
 import { calculateChecksum } from "../utils/fs.js";
+import { tsNodeArgv } from "../utils/loader.js";
 import { Range } from "../utils/range.js";
 
-const debug = Debug("upload-client");
+const debug = Debug("client");
 
 interface Input {
   path: string;
@@ -41,7 +44,7 @@ const kWorkerFreedEvent = Symbol("kWorkerFreedEvent");
 const kErrorEvent = Symbol("kErrorEvent");
 
 declare module "node:worker_threads" {
-  interface Worker extends ExtendedWorker { }
+  interface Worker extends ExtendedWorker {}
 }
 interface ExtendedWorker {
   [kTaskInfo]?: TaskInfo;
@@ -74,7 +77,16 @@ export class WorkerPool extends EventEmitter {
   }
 
   private addNewWorker(): void {
-    const worker = new Worker(new URL(import.meta.resolve("../index.js")));
+    const workerPath = fileURLToPath(import.meta.url);
+    const extension = extname(workerPath);
+    const indexPath = join(dirname(workerPath), `../index${extension}`);
+
+    const execArgv: string[] = [];
+    if (extension === ".ts") {
+      execArgv.unshift(...tsNodeArgv);
+    }
+
+    const worker = new Worker(indexPath, { execArgv });
     worker.on("message", (checksum: unknown) => {
       if (typeof checksum !== "string") {
         throw new Error("Invalid checksum");
@@ -138,6 +150,10 @@ export class WorkerPool extends EventEmitter {
       const task = { input, callback };
       this.runTask(task);
     });
+  }
+
+  public async terminate(): Promise<void> {
+    await Promise.all(this.workers.map((worker) => worker.terminate()));
   }
 }
 

@@ -14,28 +14,32 @@ import { makeCreateTokenCommand } from "./create-token.js";
 import { makeServeCommand } from "./server/serve.js";
 import { makeSynchronizeCommand } from "./synchronize.js";
 
-if (isMainThread) {
-  const command = new Command();
-  command
-    .option("--debug", "Output extra debug information")
-    .addCommand(makeCreateTokenCommand())
-    .addCommand(makeServeCommand())
-    .addCommand(makeUploadClientCommand())
-    .addCommand(makeDownloadClientCommand())
-    .addCommand(makeSynchronizeCommand())
-    .addCommand(makeAddStorageProviderCommand())
-    .hook("preAction", (that) => {
-      const options = that.opts();
-      if (options["debug"]) {
-        Debug.enable("*");
-      } else {
-        Debug.enable(
-          "upload-client,download-client,socket-client,serve,storage,data-source"
-        );
-      }
-    });
+export const command = new Command();
+command
+  .option("--debug", "Output extra debug information")
+  .addCommand(makeCreateTokenCommand())
+  .addCommand(makeAddStorageProviderCommand())
+  .addCommand(makeServeCommand())
+  .addCommand(makeUploadClientCommand())
+  .addCommand(makeDownloadClientCommand())
+  .addCommand(makeSynchronizeCommand())
+  .hook("preAction", (that) => {
+    const options = that.opts();
+    if (process.env["DEBUG"]) {
+      return;
+    }
+    if (options["debug"]) {
+      Debug.enable("*");
+    } else {
+      Debug.enable("client,server,storage,data-source");
+    }
+  });
 
-  command.parse(process.argv);
-} else {
-  worker();
+export const isMainModule = import.meta.filename === process?.argv[1];
+if (isMainModule) {
+  if (isMainThread) {
+    command.parse(process.argv);
+  } else {
+    worker();
+  }
 }

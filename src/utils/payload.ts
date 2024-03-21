@@ -1,18 +1,27 @@
-import Joi from "joi";
+import Joi from 'joi';
 
 export interface UploadPayload {
-  t: "u",
-  n: string,
-  s: string,
+  t: "u";
+  n: string;
+  s: string;
 }
 interface DownloadPayload {
-  t: "d",
+  t: "d";
 }
 export type Payload = UploadPayload | DownloadPayload;
 
 export const nameSchema = Joi.string().alphanum().case("lower");
-export const payloadSchema = Joi.object({
-  type: Joi.string().valid("d", "u").required(),
-  name: nameSchema.required(),
+export const uploadPayloadSchema = Joi.object({
+  t: Joi.string().valid("u").required(),
+  n: nameSchema.required(),
   s: nameSchema.required(),
+  iat: Joi.number().integer(),
 });
+export const downloadPayloadSchema = Joi.object({
+  t: Joi.string().valid("d").required(),
+  iat: Joi.number().integer(),
+});
+export const payloadSchema = Joi.alternatives(
+  uploadPayloadSchema,
+  downloadPayloadSchema
+);

@@ -1,9 +1,9 @@
-import fastq, { queueAsPromised } from "fastq";
-import { DataSource, EntityManager, IsNull, Not } from "typeorm";
+import fastq, { queueAsPromised } from 'fastq';
+import { DataSource, EntityManager, IsNull, Not } from 'typeorm';
 
-import { File, Part, StorageProvider } from "./entity.js";
-import { FilePart } from "./part.js";
-import { Range } from "./utils/range.js";
+import { File, Part, StorageProvider } from './entity.js';
+import { FilePart } from './part.js';
+import { Range } from './utils/range.js';
 
 const checkPart = (
   part: Part,
@@ -20,7 +20,9 @@ const checkPart = (
     throw new Error(`File not found for ${bucket} ${path} ${range}`);
   }
   if (file.bucket !== bucket || file.path !== path) {
-    throw new Error(`Part file mismatch for ${bucket} ${path} ${range}`);
+    throw new Error(
+      `Part file mismatch in range ${range}: ${file.bucket} != ${bucket} || ${file.path} !== ${path}`
+    );
   }
 };
 
@@ -147,13 +149,15 @@ export class Controller {
     return this.submitTransaction(async (manager): Promise<File | null> => {
       return manager.findOne(File, {
         where: { bucket, path },
-        relations: { parts: true, },
+        relations: { parts: true },
       });
     });
   }
   async getFilesToVerify(): Promise<File[]> {
     return this.submitTransaction(async (manager): Promise<File[]> => {
-      return await manager.find(File, { where: { checksumSHA256: Not(IsNull()), verified: false } });
+      return await manager.find(File, {
+        where: { checksumSHA256: Not(IsNull()), verified: false },
+      });
     });
   }
   async setVerified(bucket: string, path: string): Promise<void> {

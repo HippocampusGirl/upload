@@ -1,11 +1,11 @@
 import { Command, Option } from "commander";
 import Debug from "debug";
 import fastq, { queueAsPromised } from "fastq";
-import { Request } from "got";
 import Joi from "joi";
 import jwt from "jsonwebtoken";
 import { createHash } from "node:crypto";
-import { FileHandle, open } from "node:fs/promises";
+import { FileHandle, mkdir, open } from "node:fs/promises";
+import { dirname } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { join } from "path";
 
@@ -16,16 +16,22 @@ import { parseRange } from "../part.js";
 import { _ClientSocket } from "../socket.js";
 import { touch } from "../utils/fs.js";
 import { client, requestOptions } from "../utils/http-client.js";
+import { downloadPayloadSchema } from "../utils/payload.js";
 import { Progress } from "../utils/progress.js";
 import { Range } from "../utils/range.js";
+import { signal } from "../utils/signal.js";
+import { validate } from "../utils/validate.js";
 import { endpointSchema, makeClient } from "./socket-client.js";
 import { WorkerPool } from "./worker.js";
 
+import type { Request } from "got";
 interface CompletedDownloadJob extends DownloadJob {
   size: number;
 }
 
-const debug = Debug("download-client");
+const debug = Debug("client");
+
+export let downloadClient: DownloadClient | undefined;
 
 export const makeDownloadClientCommand = () => {
   const command = new Command();
@@ -34,6 +40,7 @@ export const makeDownloadClientCommand = () => {
     .showHelpAfterError()
     .requiredOption("--endpoint <value>", "Where the server is located")
     .requiredOption("--token <value>", "Token to authenticate with the server")
+    .option("--base-path <value>", "Upload paths relative to this directory")
     .option(
       "--num-threads <count>",
       "Number of concurrent upload threads",
@@ -49,6 +56,7 @@ export const makeDownloadClientCommand = () => {
       "Connection string to the database"
     )
     .action(async () => {
+      debug("running with args %o", command.parent!.args);
       const options = command.opts();
 
       const endpoint = options["endpoint"];
@@ -65,21 +73,14 @@ export const makeDownloadClientCommand = () => {
       if (typeof payload !== "object" || payload === null) {
         throw new Error(`"token" does not have a payload`);
       }
-      const { type } = payload;
-      if (type !== "download") {
-        throw new Error(`"token" is not a download token`);
-      }
+      validate(downloadPayloadSchema, payload);
+
+      const basePath: string | null = options["basePath"] || null;
 
       const numThreads = parseInt(options["numThreads"], 10);
       if (typeof numThreads !== "number") {
         throw new Error(`"numThreads" needs to be a number`);
       }
-
-      const signal = new Promise<void>((resolve) => {
-        process.on("SIGINT", () => {
-          resolve();
-        });
-      });
 
       const socket = makeClient(endpoint, token);
       const dataSource = await getDataSource(
@@ -87,21 +88,16 @@ export const makeDownloadClientCommand = () => {
         options["connectionString"]
       );
       const controller = new Controller(dataSource);
-      const client = new DownloadClient(socket, numThreads, controller);
+      downloadClient = new DownloadClient(
+        socket,
+        basePath,
+        numThreads,
+        controller
+      );
 
-      try {
-        client.listen();
-        await signal;
-      } finally {
-        socket.disconnect();
-        client.queue.kill();
-      }
+      downloadClient.listen();
     });
   return command;
-};
-
-const makePath = (job: DownloadFile): string => {
-  return join(job.bucket, job.path);
 };
 
 class DownloadClient {
@@ -109,21 +105,33 @@ class DownloadClient {
   queue: queueAsPromised<DownloadJob, void>;
   progress: Progress = new Progress();
 
+  basePath: string | null;
+
   downloads: Set<string> = new Set();
   checksumPaths: Set<string> = new Set();
 
   controller: Controller;
 
-  workerPool: WorkerPool = new WorkerPool();
+  workerPool: WorkerPool;
 
   constructor(
     socket: _ClientSocket,
+    basePath: string | null,
     numThreads: number,
     controller: Controller
   ) {
     this.socket = socket;
+    this.basePath = basePath;
     this.queue = fastq.promise(this, this.runDownloadJob, numThreads);
     this.controller = controller;
+    this.workerPool = new WorkerPool(numThreads);
+  }
+
+  terminate() {
+    this.progress.terminate();
+    this.socket.disconnect();
+    this.queue.kill();
+    this.workerPool.terminate();
   }
 
   listen() {
@@ -170,6 +178,18 @@ class DownloadClient {
         debug("failed to process checksum job: %o", error);
       }
     });
+    signal.finally(() => {
+      this.terminate();
+    });
+  }
+
+  makePath(job: DownloadFile): string {
+    const paths = [job.bucket, job.path];
+    if (this.basePath !== null) {
+      paths.unshift(this.basePath);
+    }
+    const path = join(...paths);
+    return path;
   }
 
   async retryDownloadJob(
@@ -178,8 +198,13 @@ class DownloadClient {
   ): Promise<CompletedDownloadJob> {
     const { progress } = this;
     const { start, end } = downloadJob.range;
-    const path = makePath(downloadJob);
+
+    const path = this.makePath(downloadJob);
+    await mkdir(dirname(path), { recursive: true });
     await touch(path);
+
+    // debug("downloading %s to %s", downloadJob.url, path);
+
     let fileHandle: FileHandle | undefined;
     const md5 = createHash("md5");
     let size = 0;
@@ -220,13 +245,13 @@ class DownloadClient {
     if (etag !== md5.digest("hex")) {
       throw new Error(
         "Received invalid response from server: " +
-        '"etag" does not match MD5 checksum calculated from response body'
+          '"etag" does not match MD5 checksum calculated from response body'
       );
     }
     if (downloadJob.checksumMD5 !== etag) {
       throw new Error(
         "Received invalid response from server: " +
-        '"etag" does not match MD5 checksum received from server'
+          '"etag" does not match MD5 checksum received from server'
       );
     }
     return {
@@ -249,21 +274,27 @@ class DownloadClient {
     }
 
     if (!file.verified) {
-      const path = makePath(job);
+      const path = this.makePath(job);
 
       if (this.checksumPaths.has(path)) {
+        // debug("already verifying checksum for %s", path);
         return;
       }
       this.checksumPaths.add(path);
 
-      const checksumSHA256 = await this.workerPool.submitCalculateChecksum(path, "sha256");
+      // debug("verifying checksum for %s", path);
+      const checksumSHA256 = await this.workerPool.submitCalculateChecksum(
+        path,
+        "sha256"
+      );
       if (checksumSHA256 === file.checksumSHA256) {
         debug("verified checksum for %s", path);
         await this.controller.setVerified(file.bucket, file.path);
       } else {
-        throw new Error(`Invalid checksum for ${path}: ${checksumSHA256} != ${file.checksumSHA256}`);
+        throw new Error(
+          `Invalid checksum for ${path}: ${checksumSHA256} != ${file.checksumSHA256}`
+        );
       }
-
     }
 
     await this.socket.emitWithAck("download:verified", job);
@@ -271,17 +302,24 @@ class DownloadClient {
   async finalizeDownloadJob(downloadJob: CompletedDownloadJob): Promise<void> {
     this.progress.completePart(downloadJob);
 
-    // debug(
-    //   "completed partial download for %s in range %s",
-    //   downloadJob.path,
-    //   downloadJob.range.toString()
-    // );
+    debug(
+      "completed partial download for %s in range %s",
+      downloadJob.path,
+      downloadJob.range.toString()
+    );
 
-    await this.controller.completePart(
-      downloadJob.bucket,
+    await this.controller.completePart(downloadJob.bucket, downloadJob);
+    const error = await this.socket.emitWithAck(
+      "download:complete",
       downloadJob
     );
-    await this.socket.emitWithAck("download:complete", downloadJob);
+    if (error) {
+      debug(
+        "received error %o from server after sending complete event for %o",
+        error,
+        downloadJob
+      );
+    }
     await this.verify(downloadJob);
   }
 
@@ -291,7 +329,11 @@ class DownloadClient {
         retryStream.once(
           "retry",
           (retryCount: number, error, createRetryStream: () => Request) => {
-            debug("download job failed on attempt %d with error %o", retryCount, error.message);
+            debug(
+              "download job failed on attempt %d with error %o",
+              retryCount,
+              error.message
+            );
             download(createRetryStream());
           }
         );

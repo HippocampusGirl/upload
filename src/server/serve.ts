@@ -1,11 +1,15 @@
 import { Command, Option } from "commander";
 import Debug from "debug";
 import jwt from "jsonwebtoken";
-import cluster from "node:cluster";
+import cluster, { Worker } from "node:cluster";
+import { once } from "node:events";
 import { readFileSync } from "node:fs";
-import { createServer } from "node:http";
+import { createServer, Server as HttpServer } from "node:http";
 import { availableParallelism } from "node:os";
-import { Server, Socket } from "socket.io";
+import { dirname, extname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
+import { Server as SocketServer, Socket } from "socket.io";
 import msgpackParser from "socket.io-msgpack-parser";
 
 import { S3Client } from "@aws-sdk/client-s3";
@@ -16,26 +20,30 @@ import { Controller } from "../controller.js";
 import { getDataSource } from "../data-source.js";
 import { _Server } from "../socket.js";
 import { UnauthorizedError } from "../utils/errors.js";
+import { tsNodeArgv } from "../utils/loader.js";
 import { Payload, UploadPayload } from "../utils/payload.js";
+import { signal } from "../utils/signal.js";
 import { makeS3Client, requireBucketName } from "../utils/storage.js";
 import { DownloadServer } from "./download-server.js";
 import { UploadServer } from "./upload-server.js";
 
 // Allow socket to store payload
 declare module "socket.io" {
-  interface Socket extends ExtendedSocket { }
-  interface Server extends ExtendedServer { }
+  interface Socket extends ExtendedSocket {}
+  interface Server extends ExtendedServer {}
 }
 interface ExtendedSocket {
   bucket: string;
   payload: Payload;
-  s3: S3Client;
+  s3: S3Client | undefined;
 }
 interface ExtendedServer {
   controller: Controller;
 }
 
-const debug = Debug("serve");
+const debug = Debug("server");
+
+export let server: Server | undefined;
 
 export const makeServeCommand = () => {
   const command = new Command(`serve`);
@@ -61,6 +69,10 @@ export const makeServeCommand = () => {
       ).default(availableParallelism())
     )
     .action(async () => {
+      if (command.parent === null) {
+        throw new Error("Command parent is null");
+      }
+      const args = command.parent.args;
       const options = command.opts();
       const port: number = parseInt(options["port"], 10);
       if (Number.isNaN(port)) {
@@ -77,112 +89,184 @@ export const makeServeCommand = () => {
         options["debug"]
       );
       const controller = new Controller(dataSource);
-      serve(port, publicKey, controller, parseInt(options["numThreads"], 10));
+
+      server = new Server(
+        port,
+        publicKey,
+        controller,
+        parseInt(options["numThreads"], 10),
+        args.slice()
+      );
+      await server.serve();
     });
   return command;
 };
 
-const serve = (
-  port: number,
-  publicKey: string,
-  controller: Controller,
-  numThreads: number
-) => {
-  // Exit on unhandled error
-  process.on("unhandledRejection", (error) => {
-    console.error(error);
-    process.exit(1);
-  });
+export const restartWorker = (worker: Worker) => {
+  debug(
+    `exit process ${worker.process.pid} with exit code ${worker.process.exitCode}`
+  );
+  cluster.fork();
+};
 
-  const httpServer = createServer();
-  if (cluster.isPrimary) {
-    debug(`start primary ${process.pid}`);
+class Server {
+  port: number;
+  publicKey: string;
+  controller: Controller;
+  numThreads: number;
+  args: string[];
 
-    sticky.setupMaster(httpServer, {
+  httpServer: HttpServer;
+  workers: Worker[] = [];
+
+  constructor(
+    port: number,
+    publicKey: string,
+    controller: Controller,
+    numThreads: number,
+    args: string[]
+  ) {
+    this.port = port;
+    this.publicKey = publicKey;
+    this.controller = controller;
+    this.numThreads = numThreads;
+    this.args = args;
+
+    process.on("unhandledRejection", (error: Error) => {
+      debug("received unhandled promise rejection: %O", error);
+    });
+
+    this.httpServer = createServer();
+  }
+  async terminate(): Promise<void> {
+    cluster.removeAllListeners("exit");
+    for (const worker of this.workers) {
+      worker.kill();
+    }
+    await promisify(cluster.disconnect)();
+  }
+
+  servePrimary(): Promise<unknown> {
+    debug("start primary %o", process.pid);
+
+    sticky.setupMaster(this.httpServer, {
       loadBalancingMethod: "least-connection",
     });
     setupPrimary();
+
+    const servePath = fileURLToPath(import.meta.url);
+    const extension = extname(servePath);
+    const indexPath = join(dirname(servePath), `../index${extension}`);
+    this.args.unshift(indexPath);
+
+    if (extension == ".ts") {
+      this.args.unshift(...tsNodeArgv);
+    }
     cluster.setupPrimary({
+      execArgv: this.args,
       serialization: "advanced",
     });
 
-    for (let i = 0; i < numThreads; i++) {
-      cluster.fork();
+    for (let i = 0; i < this.numThreads; i++) {
+      this.workers.push(cluster.fork());
     }
-    cluster.on("exit", (worker) => {
-      debug(`exit process ${worker.process.pid}`);
-      cluster.fork();
+    cluster.on("exit", restartWorker);
+
+    this.httpServer.listen(this.port);
+    this.httpServer.on("error", (error: Error) => {
+      debug("received error from http server: %O", error);
     });
 
-    httpServer.listen(port);
-    return;
+    signal.finally(() => {
+      this.httpServer.close();
+      if (cluster.isPrimary) {
+        this.terminate();
+      }
+    });
+
+    return Promise.all(this.workers.map((worker) => once(worker, "online")));
   }
 
-  debug(`start worker ${process.pid}`);
+  serveWorker(): Promise<unknown> {
+    debug("start worker %d", process.pid);
 
-  const io: _Server = new Server(httpServer, { parser: msgpackParser });
-  // Cluster adapter
-  io.adapter(createAdapter());
-  // Connection with the primary process
-  sticky.setupWorker(io);
+    const io: _Server = new SocketServer(this.httpServer, {
+      parser: msgpackParser,
+    });
+    // Cluster adapter
+    io.adapter(createAdapter());
+    // Connection with the primary process
+    sticky.setupWorker(io);
+    // Setup server object
+    io.controller = this.controller;
 
-  // Set up socket.io
-  io.controller = controller;
-
-  // Handle authorization
-  // based on socketio-jwt/src/authorize.ts
-  io.use(async (socket, next) => {
-    const handshake = socket.handshake;
-    const { token } = handshake.auth;
-    if (token === undefined) {
-      return next(new UnauthorizedError("Missing authorization token"));
-    }
-    if (typeof token !== "string") {
-      return next(
-        new UnauthorizedError("Authorization token needs to be string")
-      );
-    }
-    let payload;
-    try {
-      payload = jwt.verify(token, publicKey, {});
-    } catch (error) {
-      return next(new UnauthorizedError("Invalid token"));
-    }
-    if (payload === undefined || typeof payload !== "object") {
-      return next(new UnauthorizedError("Invalid token payload"));
-    }
-
-    const { controller } = io;
-
-    const { t } = payload as Payload;
-    if (t === "u") {
-      const { n, s } = payload as UploadPayload;
-      const storageProvider = await controller.getStorageProvider(s);
-      if (storageProvider === null) {
-        return next(new UnauthorizedError("Invalid token storage provider"));
+    // Handle authorization
+    // based on socketio-jwt/src/authorize.ts
+    io.use(async (socket, next) => {
+      const handshake = socket.handshake;
+      const { token } = handshake.auth;
+      if (token === undefined) {
+        return next(new UnauthorizedError("Missing authorization token"));
       }
-      socket.s3 = makeS3Client(storageProvider);
-      socket.bucket = await requireBucketName(socket.s3, n);
-      socket.payload = { t, n, s };
-    } else if (t === "d") {
-      socket.payload = { t };
+      if (typeof token !== "string") {
+        return next(
+          new UnauthorizedError("Authorization token needs to be string")
+        );
+      }
+      let payload;
+      try {
+        payload = jwt.verify(token, this.publicKey, {});
+      } catch (error) {
+        debug("token verify failed with error %O", error);
+        return next(new UnauthorizedError("Invalid token"));
+      }
+      if (payload === undefined || typeof payload !== "object") {
+        return next(new UnauthorizedError("Invalid token payload"));
+      }
+
+      const { controller } = io;
+
+      const { t } = payload as Payload;
+      if (t === "u") {
+        const { n, s } = payload as UploadPayload;
+        const storageProvider = await controller.getStorageProvider(s);
+        if (storageProvider === null) {
+          return next(new UnauthorizedError("Invalid token storage provider"));
+        }
+        socket.s3 = makeS3Client(storageProvider);
+        socket.bucket = await requireBucketName(socket.s3, n);
+        socket.payload = { t, n, s };
+      } else if (t === "d") {
+        socket.payload = { t };
+        socket.join("download");
+      }
+
+      return next();
+    });
+
+    const downloadServer: DownloadServer = new DownloadServer(io);
+    const uploadServer: UploadServer = new UploadServer(io);
+
+    io.on("connection", (socket: Socket) => {
+      switch (socket.payload.t) {
+        case "d": // Download
+          downloadServer.listen(socket);
+          break;
+        case "u": // Upload
+          uploadServer.listen(socket);
+          break;
+      }
+    });
+
+    return Promise.resolve();
+  }
+
+  serve(): Promise<unknown> {
+    if (cluster.isPrimary) {
+      return this.servePrimary();
+    } else if (cluster.isWorker) {
+      return this.serveWorker();
     }
-
-    socket.join(t);
-    return next();
-  });
-
-  const downloadServer: DownloadServer = new DownloadServer(io);
-  const uploadServer: UploadServer = new UploadServer(io);
-
-  io.on("connection", (socket: Socket) => {
-    switch (socket.payload.t) {
-      case "d": // Download
-        downloadServer.listen(socket);
-        break;
-      case "u": // Upload
-        uploadServer.listen(socket);
-        break;
-    }
-  });
-};
+    return Promise.reject();
+  }
+}

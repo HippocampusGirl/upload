@@ -7,26 +7,26 @@ import Joi from "joi";
 import jwt from "jsonwebtoken";
 import { FileHandle, open } from "node:fs/promises";
 import { availableParallelism } from "node:os";
+import { relative } from "node:path";
 import { PassThrough } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import { inspect } from "node:util";
 
 import { parseRange } from "../part.js";
 import { _ClientSocket } from "../socket.js";
 import { UploadCreateError } from "../utils/errors.js";
 import { client, requestOptions } from "../utils/http-client.js";
+import { uploadPayloadSchema } from "../utils/payload.js";
 import { Progress } from "../utils/progress.js";
+import { signal } from "../utils/signal.js";
+import { validate } from "../utils/validate.js";
 import { endpointSchema, makeClient } from "./socket-client.js";
-import {
-  generateUploadRequests,
-  RangeOptions,
-  UploadJob,
-  UploadRequest
-} from "./upload-parts.js";
+import { generateUploadRequests, RangeOptions, UploadJob, UploadRequest } from "./upload-parts.js";
 import { WorkerPool } from "./worker.js";
 
-interface CompletedUploadJob extends UploadJob { }
+interface CompletedUploadJob extends UploadJob {}
 
-const debug = Debug("upload-client");
+const debug = Debug("client");
 
 export const makeUploadClientCommand = () => {
   const command = new Command();
@@ -36,6 +36,7 @@ export const makeUploadClientCommand = () => {
     .requiredOption("--endpoint <value>", "Where the server is located")
     .requiredOption("--token <value>", "Token to authenticate with the server")
     .requiredOption("--path <value...>", "Path or paths to upload")
+    .option("--base-path <value>", "Upload paths relative to this directory")
     .option(
       "--min-part-size <size>",
       "Minimum size of file parts for concurrent upload",
@@ -51,10 +52,11 @@ export const makeUploadClientCommand = () => {
     .addOption(
       new Option(
         "--num-upload-requests <number>",
-        "Number upload requests per batch"
+        "Number upload requests per path"
       ).default(10)
     )
     .action(async () => {
+      debug("running with args %o", command.parent!.args);
       const options = command.opts();
 
       const endpoint = options["endpoint"];
@@ -71,15 +73,13 @@ export const makeUploadClientCommand = () => {
       if (typeof payload !== "object" || payload === null) {
         throw new Error(`"token" does not have a payload`);
       }
-      const { type } = payload;
-      if (type !== "upload") {
-        throw new Error(`"token" is not an upload token`);
-      }
+      validate(uploadPayloadSchema, payload);
 
       const paths = options["path"];
       if (!Array.isArray(paths)) {
         throw new Error(`"paths" needs to be an array`);
       }
+      const basePath: string | null = options["basePath"] || null;
 
       const minPartSize = parse(options["minPartSize"]);
       if (!Number.isInteger(minPartSize) || minPartSize === null) {
@@ -101,34 +101,76 @@ export const makeUploadClientCommand = () => {
       }
 
       const socket = makeClient(endpoint, token);
-      const client = new UploadClient(socket, numThreads, numUploadRequests);
+      const client = new UploadClient(
+        socket,
+        basePath,
+        numThreads,
+        numUploadRequests
+      );
 
       try {
-        await client.submitPaths(paths, { minPartSize, maxPartCount });
+        const uploadPromise = client.submitPaths(paths, {
+          minPartSize,
+          maxPartCount,
+        });
+        await Promise.race([uploadPromise, signal]);
+        if (inspect(uploadPromise).includes("pending")) {
+          debug("upload not finished, caught signal");
+        }
       } catch (error) {
         debug("error during upload %O", error);
       } finally {
-        socket.disconnect();
-        process.exit(0);
+        client.terminate();
       }
     });
   return command;
 };
 
-class UploadClient {
+export class UploadClient {
   socket: _ClientSocket;
   queue: queueAsPromised<UploadJob, CompletedUploadJob>;
-
-  workerPool: WorkerPool = new WorkerPool();
+  workerPool: WorkerPool;
+  numUploadRequests: number;
 
   progress: Progress = new Progress();
 
-  numUploadRequests: number;
+  basePath: string | null;
 
-  constructor(socket: _ClientSocket, numThreads: number, numUploadRequests: number) {
+  constructor(
+    socket: _ClientSocket,
+    basePath: string | null,
+    numThreads: number,
+    numUploadRequests: number
+  ) {
     this.socket = socket;
-    this.queue = fastq.promise(this, this.runUploadJob, numThreads);
+    this.queue = fastq.promise(
+      this,
+      this.runUploadJob,
+      Math.max(numThreads, 1)
+    );
     this.numUploadRequests = numUploadRequests;
+    this.workerPool = new WorkerPool(numThreads);
+    this.basePath = basePath;
+  }
+
+  terminate() {
+    this.progress.terminate();
+    this.socket.disconnect();
+    this.queue.kill();
+    this.workerPool.terminate();
+  }
+
+  getRelativePath(path: string): string {
+    if (this.basePath === null) {
+      return path;
+    }
+    const relativePath = relative(this.basePath, path);
+    if (relativePath.startsWith("..") || relativePath.startsWith("/")) {
+      throw new Error(
+        `Path ${path} is not in ${this.basePath}: ${relativePath}`
+      );
+    }
+    return relativePath;
   }
 
   async retryUploadJob(
@@ -172,50 +214,64 @@ class UploadClient {
   }
 
   async runUploadJob(uploadJob: UploadJob): Promise<CompletedUploadJob> {
-    return new Promise((resolve: (value: Promise<CompletedUploadJob>) => void) => {
-      const upload = async (retryStream: Request) => {
-        retryStream.once(
-          "retry",
-          (retryCount: number, error, createRetryStream: () => Request) => {
-            debug("upload job failed on attempt %d with error %o", retryCount, error.message);
-            upload(createRetryStream());
+    return new Promise(
+      (resolve: (value: Promise<CompletedUploadJob>) => void) => {
+        const upload = async (retryStream: Request) => {
+          retryStream.once(
+            "retry",
+            (retryCount: number, error, createRetryStream: () => Request) => {
+              debug(
+                "upload job failed on attempt %d with error %o",
+                retryCount,
+                error.message
+              );
+              upload(createRetryStream());
+            }
+          );
+          try {
+            await this.retryUploadJob(retryStream, uploadJob);
+            resolve(this.finalizeUploadJob(uploadJob));
+          } catch {
+            // We do not care about this error, as `got` will retry the request
           }
-        );
-        try {
-          await this.retryUploadJob(retryStream, uploadJob);
-          resolve(this.finalizeUploadJob(uploadJob));
-        } catch {
-          // We do not care about this error, as `got` will retry the request
-        }
-      };
-      const { url, range } = uploadJob;
-      const writeStream: Request = client.stream.put(url, {
-        headers: {
-          "Content-Type": "application/octet-stream",
-          "Content-Length": `${range.size()}`,
-        },
-        ...requestOptions,
-      });
-      upload(writeStream);
-    });
+        };
+        const { url, range } = uploadJob;
+        const writeStream: Request = client.stream.put(url, {
+          headers: {
+            "Content-Type": "application/octet-stream",
+            "Content-Length": `${range.size()}`,
+          },
+          ...requestOptions,
+        });
+        upload(writeStream);
+      }
+    );
   }
 
-  async finalizeUploadJob(uploadJob: CompletedUploadJob): Promise<CompletedUploadJob> {
+  async finalizeUploadJob(
+    uploadJob: CompletedUploadJob
+  ): Promise<CompletedUploadJob> {
     this.progress.completePart(uploadJob);
+
     let error;
     try {
+      uploadJob.path = this.getRelativePath(uploadJob.path);
       error = await this.socket.emitWithAck("upload:complete", uploadJob);
       if (error) {
-        debug("error occurred while finalizing upload job %o: %O", uploadJob, error);
+        debug(
+          "error occurred while finalizing upload job %o: %O",
+          uploadJob,
+          error
+        );
       }
     } catch (error) {
       debug("error sending complete %o", error);
     }
-    // debug(
-    //   "completed partial upload for %s in range %s",
-    //   uploadJob.path,
-    //   uploadJob.range.toString()
-    // );
+    debug(
+      "completed partial upload for %s in range %s",
+      uploadJob.path,
+      uploadJob.range.toString()
+    );
     return uploadJob;
   }
 
@@ -224,15 +280,20 @@ class UploadClient {
       path,
       "sha256"
     );
+    const relativePath = this.getRelativePath(path);
     let error;
     try {
       error = await this.socket.emitWithAck(
         "upload:checksum",
-        path,
+        relativePath,
         checksumSHA256
       );
       if (error) {
-        debug("error submitting checksum job %o: %O", [path, checksumSHA256], error);
+        debug(
+          "error submitting checksum job %o: %O",
+          [path, checksumSHA256],
+          error
+        );
         // continue;
       }
     } catch (error) {
@@ -241,13 +302,15 @@ class UploadClient {
   }
 
   async createUploadJobs(
+    path: string,
     uploadRequests: UploadRequest[]
   ): Promise<unknown> {
     if (uploadRequests.length === 0) {
       // Nothing to do
       return;
     }
-    const results: (UploadJob | UploadCreateError)[] = await this.socket.emitWithAck("upload:create", uploadRequests);
+    const results: (UploadJob | UploadCreateError)[] =
+      await this.socket.emitWithAck("upload:create", uploadRequests);
 
     const promises: Promise<unknown>[] = [];
     for (const [index, result] of results.entries()) {
@@ -255,7 +318,9 @@ class UploadClient {
         const { error } = result;
         const uploadRequest = uploadRequests[index];
         if (uploadRequest === undefined) {
-          throw new Error(`Received invalid response from server: "uploadRequests[${index}]" is undefined`);
+          throw new Error(
+            `Received invalid response from server: "uploadRequests[${index}]" is undefined`
+          );
         }
         if (error == "upload-exists") {
           this.progress.addPart(uploadRequest);
@@ -272,6 +337,8 @@ class UploadClient {
       }
       parseRange(result);
       this.progress.addPart(result);
+
+      result.path = path;
       promises.push(this.queue.push(result));
     }
 
@@ -280,6 +347,8 @@ class UploadClient {
 
   async submitPaths(paths: string[], options: RangeOptions): Promise<unknown> {
     const jobs = paths.map(async (path): Promise<void> => {
+      const relativePath = this.getRelativePath(path);
+
       const promises: Promise<unknown>[] = [];
 
       let uploadRequests: UploadRequest[] = [];
@@ -288,14 +357,15 @@ class UploadClient {
         this.workerPool,
         options
       )) {
+        uploadRequest.path = relativePath;
         uploadRequests.push(uploadRequest);
         if (uploadRequests.length > 10) {
-          promises.push(this.createUploadJobs(uploadRequests));
+          promises.push(this.createUploadJobs(path, uploadRequests));
           uploadRequests = [];
         }
       }
 
-      promises.push(this.createUploadJobs(uploadRequests));
+      promises.push(this.createUploadJobs(path, uploadRequests));
       promises.push(this.submitChecksum(path));
       await Promise.all(promises);
 
