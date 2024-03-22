@@ -142,7 +142,7 @@ class DownloadClient {
           parseRange(downloadJob);
 
           const run = await this.controller.addFilePart(
-            downloadJob.bucket,
+            downloadJob.n,
             downloadJob
           );
           if (!run) {
@@ -171,8 +171,8 @@ class DownloadClient {
     });
     this.socket.on("download:checksum", async (checksumJob: ChecksumJob) => {
       try {
-        const { bucket, path, checksumSHA256 } = checksumJob;
-        await this.controller.setChecksumSHA256(bucket, path, checksumSHA256);
+        const { n, path, checksumSHA256 } = checksumJob;
+        await this.controller.setChecksumSHA256(n, path, checksumSHA256);
         await this.verify(checksumJob);
       } catch (error) {
         debug("failed to process checksum job: %o", error);
@@ -184,7 +184,7 @@ class DownloadClient {
   }
 
   makePath(job: DownloadFile): string {
-    const paths = [job.bucket, job.path];
+    const paths = [job.n, job.path];
     if (this.basePath !== null) {
       paths.unshift(this.basePath);
     }
@@ -261,7 +261,7 @@ class DownloadClient {
   }
 
   async verify(job: DownloadFile): Promise<void> {
-    const file = await this.controller.getFile(job.bucket, job.path);
+    const file = await this.controller.getFile(job.n, job.path);
 
     if (file === null) {
       return;
@@ -289,7 +289,7 @@ class DownloadClient {
       );
       if (checksumSHA256 === file.checksumSHA256) {
         debug("verified checksum for %s", path);
-        await this.controller.setVerified(file.bucket, file.path);
+        await this.controller.setVerified(file.n, file.path);
       } else {
         throw new Error(
           `Invalid checksum for ${path}: ${checksumSHA256} != ${file.checksumSHA256}`

@@ -1,27 +1,22 @@
-import fastq, { queueAsPromised } from 'fastq';
-import { DataSource, EntityManager, IsNull, Not } from 'typeorm';
+import fastq, { queueAsPromised } from "fastq";
+import { DataSource, EntityManager, IsNull, Not } from "typeorm";
 
-import { File, Part, StorageProvider } from './entity.js';
-import { FilePart } from './part.js';
-import { Range } from './utils/range.js';
+import { File, Part, StorageProvider } from "./entity.js";
+import { FilePart } from "./part.js";
+import { Range } from "./utils/range.js";
 
-const checkPart = (
-  part: Part,
-  range: Range,
-  bucket: string,
-  path: string
-): void => {
+const checkPart = (part: Part, range: Range, n: string, path: string): void => {
   const { start, end } = range;
   if (part.start !== start || part.end !== end) {
-    throw new Error(`Part range mismatch for ${bucket} ${path} ${range}`);
+    throw new Error(`Part range mismatch for ${n} ${path} ${range}`);
   }
   const file = part.file;
   if (!file) {
-    throw new Error(`File not found for ${bucket} ${path} ${range}`);
+    throw new Error(`File not found for ${n} ${path} ${range}`);
   }
-  if (file.bucket !== bucket || file.path !== path) {
+  if (file.n !== n || file.path !== path) {
     throw new Error(
-      `Part file mismatch in range ${range}: ${file.bucket} != ${bucket} || ${file.path} !== ${path}`
+      `Part file mismatch in range ${range}: ${file.n} != ${n} || ${file.path} !== ${path}`
     );
   }
 };
@@ -47,23 +42,22 @@ export class Controller {
   }
 
   async setChecksumSHA256(
-    bucket: string,
+    n: string,
     path: string,
     checksumSHA256: string
   ): Promise<void> {
     return await this.submitTransaction(async (manager) => {
-      const result = await manager.upsert(
-        File,
-        { bucket, path, checksumSHA256 },
-        ["bucket", "path"]
-      );
+      const result = await manager.upsert(File, { n, path, checksumSHA256 }, [
+        "n",
+        "path",
+      ]);
       if (result.identifiers.length !== 1) {
-        throw new Error(`File not found for ${bucket} ${path}`);
+        throw new Error(`File not found for ${n} ${path}`);
       }
     });
   }
 
-  async addFilePart(bucket: string, filePart: FilePart): Promise<boolean> {
+  async addFilePart(n: string, filePart: FilePart): Promise<boolean> {
     const { path, range, checksumMD5, size } = filePart;
     const { start, end } = range;
     return this.submitTransaction(async (manager): Promise<boolean> => {
@@ -74,27 +68,27 @@ export class Controller {
         },
       });
       if (part !== null) {
-        checkPart(part, range, bucket, path);
+        checkPart(part, range, n, path);
         return !part.complete;
       }
 
       const file: File | null = await manager.findOneBy(File, {
-        bucket,
+        n,
         path,
       });
       if (file === null) {
         // We need to create a new file
         await manager.insert(File, {
-          bucket,
+          n,
           path,
           size,
         });
       } else if (file.size === null) {
-        await manager.update(File, { bucket, path }, { size });
+        await manager.update(File, { n, path }, { size });
       } else if (file.size !== size) {
         // Check that the size matches
         throw new Error(
-          `Inconsistent size for ${bucket} ${path}: ${file.size} !== ${size}`
+          `Inconsistent size for ${n} ${path}: ${file.size} !== ${size}`
         );
       }
       // We need to create a new part
@@ -102,7 +96,7 @@ export class Controller {
         checksumMD5,
         start,
         end,
-        file: { bucket, path },
+        file: { n, path },
       });
       return true;
     });
@@ -122,14 +116,14 @@ export class Controller {
       });
     });
   }
-  async completePart(bucket: string, filePart: FilePart): Promise<File> {
+  async completePart(n: string, filePart: FilePart): Promise<File> {
     const { path, range, checksumMD5 } = filePart;
     return this.submitTransaction(async (manager): Promise<File> => {
       const result = await manager.update(Part, checksumMD5, {
         complete: true,
       });
       if (result.affected !== 1) {
-        throw new Error(`File not found for ${bucket} ${path}`);
+        throw new Error(`File not found for ${n} ${path}`);
       }
       const part: Part | null = await manager.findOne(Part, {
         where: { checksumMD5 },
@@ -138,17 +132,17 @@ export class Controller {
         },
       });
       if (part === null) {
-        throw new Error(`Part not found for ${bucket} ${path} ${range}`);
+        throw new Error(`Part not found for ${n} ${path} ${range}`);
       }
-      checkPart(part, range, bucket, path);
+      checkPart(part, range, n, path);
       return part.file;
     });
   }
 
-  async getFile(bucket: string, path: string): Promise<File | null> {
+  async getFile(n: string, path: string): Promise<File | null> {
     return this.submitTransaction(async (manager): Promise<File | null> => {
       return manager.findOne(File, {
-        where: { bucket, path },
+        where: { n, path },
         relations: { parts: true },
       });
     });
@@ -160,15 +154,15 @@ export class Controller {
       });
     });
   }
-  async setVerified(bucket: string, path: string): Promise<void> {
+  async setVerified(n: string, path: string): Promise<void> {
     return this.submitTransaction(async (manager): Promise<void> => {
       const result = await manager.update(
         File,
-        { bucket, path },
+        { n, path },
         { verified: true }
       );
       if (result.affected !== 1) {
-        throw new Error(`File not found for ${bucket} ${path}`);
+        throw new Error(`File not found for ${n} ${path}`);
       }
     });
   }

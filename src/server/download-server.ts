@@ -67,8 +67,8 @@ export class DownloadServer {
     socket.on(
       "download:verified",
       async (file: DownloadFile, callback: () => void) => {
-        const { bucket, path } = file;
-        await controller.setVerified(bucket, path);
+        const { n, path } = file;
+        await controller.setVerified(n, path);
         callback();
       }
     );
@@ -119,6 +119,7 @@ export class DownloadServer {
       signedUrlOptions
     );
     const downloadJob: DownloadJob = {
+      n: part.file.n,
       storageProviderId,
       bucket: object.Bucket,
       url,
@@ -246,12 +247,12 @@ export class DownloadServer {
 
   async submitChecksumJob(file: File): Promise<void> {
     const io = this.io;
-    const { bucket, path, checksumSHA256 } = file;
+    const { n, path, checksumSHA256 } = file;
     if (checksumSHA256 === null) {
       return;
     }
     const checksumJob: ChecksumJob = {
-      bucket,
+      n,
       path,
       checksumSHA256,
     };

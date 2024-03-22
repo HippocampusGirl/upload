@@ -38,7 +38,7 @@ export class Part {
 @Entity()
 export class File {
   @PrimaryColumn()
-  bucket: string;
+  n: string;
   @PrimaryColumn()
   path: string;
 
@@ -54,15 +54,24 @@ export class File {
   @OneToMany(() => Part, (part) => part.file)
   parts: Part[];
 
+  /**
+   * Creates a new instance of the File class.
+   * @param n - The name of the token that the file was uploaded from.
+   * @param path - The path of the file.
+   * @param parts - The parts of the file.
+   * @param size - The size of the file.
+   * @param verified - Indicates if the file is verified.
+   * @param checksumSHA256 - The SHA256 checksum of the file.
+   */
   constructor({
-    bucket,
+    n,
     path,
     parts,
     size,
     verified,
     checksumSHA256,
   }: Partial<File>) {
-    this.bucket = bucket!;
+    this.n = n!;
     this.path = path!;
     this.size = size || null;
     this.verified = verified || false;

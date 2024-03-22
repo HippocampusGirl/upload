@@ -20,7 +20,13 @@ export class UploadServer {
 
   listen(socket: _ServerSocket) {
     const { controller } = this.io;
-    const { s3, bucket } = socket;
+    const { s3, bucket, payload } = socket;
+    if (payload.t !== "u") {
+      throw new Error(
+        "Cannot listen with socket.payload, because it is not an upload payload"
+      );
+    }
+    const { n } = payload;
 
     if (s3 === undefined) {
       throw new Error("Cannot listen on socket without an S3Client");
@@ -34,7 +40,7 @@ export class UploadServer {
       // Check if already exists
       let success;
       try {
-        success = await controller.addFilePart(bucket, uploadRequest);
+        success = await controller.addFilePart(n, uploadRequest);
       } catch (error) {
         debug(error);
         return { error: "unknown" };
@@ -83,7 +89,7 @@ export class UploadServer {
         parseRange(uploadJob);
         // debug("received complete event for upload job %o", uploadJob);
         try {
-          await controller.completePart(bucket, uploadJob);
+          await controller.completePart(n, uploadJob);
         } catch (error) {
           debug(error);
           callback({ error: "unknown" });
@@ -100,7 +106,7 @@ export class UploadServer {
         callback: (u: UploadCreateError | undefined) => void
       ): Promise<void> => {
         try {
-          await controller.setChecksumSHA256(bucket, path, checksumSHA256);
+          await controller.setChecksumSHA256(n, path, checksumSHA256);
         } catch (error) {
           debug(error);
           callback({ error: "unknown" });
