@@ -16,13 +16,13 @@ interface LifecycleRule {
 const lifecycleRuleSchema: ObjectSchema<LifecycleRule> = Joi.object({
   daysFromHidingToDeleting: Joi.number().required(),
   daysFromUploadingToHiding: Joi.number().allow(null).required(),
-  fileNamePrefix: Joi.string().required(),
+  fileNamePrefix: Joi.string().allow("").required(),
 });
 /**
  * Represents a lifecycle rule to keep only the last version of a file.
  * Copied from https://www.backblaze.com/docs/cloud-storage-lifecycle-rules
  */
-const keepOnlyLastVersion: LifecycleRule = {
+export const keepOnlyLastVersion: LifecycleRule = {
   daysFromHidingToDeleting: 1,
   daysFromUploadingToHiding: null,
   fileNamePrefix: "",
@@ -37,12 +37,12 @@ const serverSideEncryptionSettingSchema: ObjectSchema<ServerSideEncryptionSettin
     mode: Joi.string().valid("SSE-B2").required(),
     algorithm: Joi.string().valid("AES256").required(),
   });
-const defaultServerSideEncryption: ServerSideEncryptionSetting = {
+export const defaultServerSideEncryption: ServerSideEncryptionSetting = {
   mode: "SSE-B2",
   algorithm: "AES256",
 };
 
-interface AuthorizeAccountResponse {
+export interface AuthorizeAccountResponse {
   accountId: string;
   authorizationToken: string;
   apiUrl: string;
@@ -55,7 +55,7 @@ const authorizeAccountResponseSchema: ObjectSchema<AuthorizeAccountResponse> =
   }).unknown();
 
 const apiUrl: string = "https://api.backblazeb2.com";
-const authorizeAccount = async (
+export const authorizeAccount = async (
   applicationKeyId: string,
   ApplicationKey: string
 ): Promise<AuthorizeAccountResponse> => {
@@ -97,7 +97,7 @@ const createBucketRequestSchema: ObjectSchema<CreateBucketRequest> = Joi.object(
     bucketInfo: Joi.object().empty().required(),
     corsRules: Joi.array().empty().required(),
     fileLockEnabled: Joi.boolean().valid(false).required(),
-    lifecycleRules: lifecycleRuleSchema,
+    lifecycleRules: Joi.array().items(lifecycleRuleSchema),
     replicationConfiguration: Joi.object().empty().required(),
     defaultServerSideEncryption: serverSideEncryptionSettingSchema,
   }
@@ -109,7 +109,7 @@ const createBucketResponseSchema: ObjectSchema<CreateBucketResponse> =
   Joi.object({
     options: Joi.array().items(Joi.string().valid("s3")).required(),
   }).unknown();
-const createBucket = async (
+export const createBucket = async (
   authorizeAccountResponse: AuthorizeAccountResponse,
   bucketName: string
 ): Promise<CreateBucketResponse> => {
