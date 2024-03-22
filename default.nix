@@ -8,6 +8,18 @@ pkgs.buildNpmPackage {
 
   npmDepsHash = "sha256-w3GawSgddEHOsWd9Zn/Z7rJb3TrOmYUtjRZdcuupy4k=";
 
+  doCheck = true;
+  checkPhase = ''
+    runHook preCheck
+
+    # Remove integration test that needs testcontainers
+    rm src/__tests__/integration.test.ts
+
+    npm test
+
+    runHook postCheck
+  '';
+
   meta = with lib; {
     description = "A software for data transfers via the cloud";
     homepage = "https://github.com/HippocampusGirl/upload";

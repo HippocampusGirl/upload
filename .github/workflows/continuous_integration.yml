@@ -28,7 +28,7 @@ jobs:
       - run: npm test
       - run: npm run build
 
-      - run: nix build .#defaultPackage
+      - run: nix build .#default
 
       - run: npm pack
         if: startsWith(github.ref, 'refs/tags/')
