@@ -1,3 +1,4 @@
+import { debug } from "console";
 import { Stats } from "fs";
 import jwt from "jsonwebtoken";
 import net from "net";
@@ -13,7 +14,6 @@ import { LocalstackContainer, StartedLocalStackContainer } from "@testcontainers
 import { downloadClient } from "../client/download-client.js";
 import { command } from "../index.js";
 import { server } from "../server/serve.js";
-import { makeBucketName } from "../storage/base.js";
 import { calculateChecksum } from "../utils/fs.js";
 
 const getPort = (): Promise<number> => {
@@ -44,7 +44,6 @@ describe("application", () => {
   let downloadToken: string;
   let uploadFile: string;
   let uploadFileChecksumSHA256: string;
-  let bucket: string;
   let downloadFile: string;
 
   const storageProviderId = "local";
@@ -80,8 +79,7 @@ describe("application", () => {
     await runShellCommand(`dd if=/dev/urandom of=${uploadFile} bs=64M count=1`);
     uploadFileChecksumSHA256 = await calculateChecksum(uploadFile, "sha256");
 
-    bucket = makeBucketName(tokenName, accessKeyId);
-    downloadFile = join(temporaryDirectory, bucket, uploadFileName);
+    downloadFile = join(temporaryDirectory, tokenName, uploadFileName);
   }, 10 * 60 * 1000);
   afterAll(async () => {
     downloadClient?.terminate();
@@ -229,22 +227,26 @@ describe("application", () => {
         try {
           stats = await lstat(downloadFile);
         } catch {
+          debug("file %o not available yet", downloadFile);
           continue;
         }
         expect(stats.isFile()).toBeTruthy();
         if (downloadClient === undefined) {
+          debug("database not available yet");
           continue;
         }
         const file = await downloadClient.controller.getFile(
-          bucket,
+          tokenName,
           uploadFileName
         );
         if (file === null) {
+          debug("file not in database yet");
           continue;
         }
         if (file.verified) {
           break;
         }
+        debug("file not verified yet");
       }
       const downloadFileChecksumSHA256 = await calculateChecksum(
         downloadFile,

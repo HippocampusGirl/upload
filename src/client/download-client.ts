@@ -308,7 +308,7 @@ class DownloadClient {
       downloadJob.range.toString()
     );
 
-    await this.controller.completePart(downloadJob.bucket, downloadJob);
+    await this.controller.completePart(downloadJob.n, downloadJob);
     const error = await this.socket.emitWithAck(
       "download:complete",
       downloadJob
