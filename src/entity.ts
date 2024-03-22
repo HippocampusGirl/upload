@@ -1,9 +1,10 @@
 import { Column, Entity, ManyToOne, OneToMany, PrimaryColumn } from "typeorm";
-import type { Relation } from "typeorm/common/RelationType.js";
 
 import { S3ClientConfig } from "@aws-sdk/client-s3";
 
 import { Range, reduceRanges } from "./utils/range.js";
+
+import type { Relation } from "typeorm/common/RelationType.js";
 
 @Entity()
 export class Part {
@@ -21,23 +22,12 @@ export class Part {
   @ManyToOne(() => File, (file) => file.parts)
   file: Relation<File>;
 
-  @ManyToOne(() => StorageProvider, (storageProvider) => storageProvider.parts)
-  storageProvider: Relation<StorageProvider>;
-
-  constructor({
-    checksumMD5,
-    start,
-    end,
-    complete,
-    file,
-    storageProvider,
-  }: Partial<Part>) {
+  constructor({ checksumMD5, start, end, complete, file }: Partial<Part>) {
     this.checksumMD5 = checksumMD5!;
     this.start = start!;
     this.end = end!;
     this.complete = complete || false;
     this.file = file!;
-    this.storageProvider = storageProvider!;
   }
 
   get range(): Range {
@@ -117,9 +107,6 @@ export class StorageProvider {
   @Column("varchar", { nullable: true, default: null })
   bucketLocationConstraint: string | null;
 
-  @OneToMany(() => Part, (part) => part.storageProvider)
-  parts: Part[];
-
   constructor({
     id,
     endpoint,
@@ -127,7 +114,6 @@ export class StorageProvider {
     accessKeyId,
     secretAccessKey,
     bucketLocationConstraint,
-    parts,
   }: Partial<Storage>) {
     this.id = id!;
     this.endpoint = endpoint!;
@@ -135,7 +121,6 @@ export class StorageProvider {
     this.accessKeyId = accessKeyId!;
     this.secretAccessKey = secretAccessKey!;
     this.bucketLocationConstraint = bucketLocationConstraint || null;
-    this.parts = parts || [];
   }
 
   get configuration(): S3ClientConfig {
