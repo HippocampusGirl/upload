@@ -21,6 +21,7 @@ coverage
 
 # API keys and secrets
 .env
+setup.sh
 
 # Dependency directory
 node_modules

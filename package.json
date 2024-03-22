@@ -10,7 +10,7 @@
   ],
   "type": "module",
   "engines": {
-    "node": ">=16"
+    "node": ">=20.9"
   },
   "bin": {
     "upload": "./build/index.js"
