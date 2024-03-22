@@ -3,7 +3,9 @@ import Debug from "debug";
 import pg from "pg";
 import { DataSource } from "typeorm";
 
-import { File, Part, StorageProvider } from "./entity.js";
+import { File } from "./entity/file.js";
+import { Part } from "./entity/part.js";
+import { StorageProvider } from "./entity/storage-provider.js";
 
 const debug = Debug("data-source");
 export const getDataSource = async (

@@ -1,7 +1,9 @@
 import fastq, { queueAsPromised } from "fastq";
 import { DataSource, EntityManager, IsNull, Not } from "typeorm";
 
-import { File, Part, StorageProvider } from "./entity.js";
+import { File } from "./entity/file.js";
+import { Part } from "./entity/part.js";
+import { StorageProvider } from "./entity/storage-provider.js";
 import { FilePart } from "./part.js";
 import { Range } from "./utils/range.js";
 

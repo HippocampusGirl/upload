@@ -5,7 +5,6 @@ import {
     ListBucketsCommand, ListObjectsCommand, ListObjectsCommandInput, S3Client
 } from "@aws-sdk/client-s3";
 
-import { StorageProvider } from "../entity.js";
 import { prefix } from "./prefix.js";
 
 // Allow socket to store payload
@@ -17,15 +16,6 @@ interface ExtendedS3Client {
 }
 
 const debug = Debug("storage");
-
-export const makeS3Client = (storageProvider: StorageProvider): S3Client => {
-  const s3 = new S3Client({
-    forcePathStyle: true,
-    ...storageProvider.configuration,
-  });
-  s3.bucketLocationConstraint = storageProvider.bucketLocationConstraint;
-  return s3;
-};
 
 export const createS3Bucket = async (
   s3: S3Client,

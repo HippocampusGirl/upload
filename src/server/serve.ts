@@ -20,7 +20,6 @@ import { Controller } from "../controller.js";
 import { getDataSource } from "../data-source.js";
 import { _Server } from "../socket.js";
 import { requireBucketName } from "../storage/base.js";
-import { makeS3Client } from "../storage/s3.js";
 import { UnauthorizedError } from "../utils/errors.js";
 import { tsNodeArgv } from "../utils/loader.js";
 import { Payload, UploadPayload } from "../utils/payload.js";
@@ -235,8 +234,9 @@ class Server {
           return next(new UnauthorizedError("Invalid token storage provider"));
         }
         try {
-          socket.s3 = makeS3Client(storageProvider);
-          socket.bucket = await requireBucketName(socket.s3, n);
+          const { s3 } = storageProvider;
+          socket.bucket = await requireBucketName(s3, n);
+          socket.s3 = s3;
         } catch (error) {
           return next(new UnauthorizedError("Cannot create bucket for token"));
         }

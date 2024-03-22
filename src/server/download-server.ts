@@ -5,10 +5,12 @@ import { S3Client } from "@aws-sdk/client-s3";
 
 import { makeKey } from "../client/upload-parts.js";
 import { ChecksumJob, DownloadFile, DownloadJob } from "../download-schema.js";
-import { File, Part, StorageProvider } from "../entity.js";
+import { File } from "../entity/file.js";
+import { Part } from "../entity/part.js";
+import { StorageProvider } from "../entity/storage-provider.js";
 import { _Server, _ServerSocket } from "../socket.js";
 import { deleteFile, getDownloadUrl } from "../storage/base.js";
-import { _BucketObject, listObjects, makeS3Client } from "../storage/s3.js";
+import { _BucketObject, listObjects } from "../storage/s3.js";
 import { DownloadCompleteError } from "../utils/errors.js";
 import { getRangeFromPathname } from "./download-parse.js";
 
@@ -45,7 +47,7 @@ export class DownloadServer {
           callback({ error: "unknown-storage-provider" });
           return;
         }
-        const s3 = makeS3Client(storageProvider);
+        const { s3 } = storageProvider;
         try {
           await deleteFile(s3, downloadJob.bucket, makeKey(downloadJob));
         } catch (error) {
@@ -123,7 +125,7 @@ export class DownloadServer {
   }
   async checkDownloadJobs(storageProvider: StorageProvider): Promise<void> {
     const { controller } = this.io;
-    const s3 = makeS3Client(storageProvider);
+    const { s3 } = storageProvider;
 
     const checkChecksumJob = async (file: File): Promise<void> => {
       const checksumSHA256 = file.checksumSHA256;
