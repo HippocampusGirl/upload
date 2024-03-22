@@ -1,15 +1,13 @@
 import Debug from "debug";
 import Joi from "joi";
 
-import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { S3Client } from "@aws-sdk/client-s3";
 
 import { makeKey } from "../client/upload-parts.js";
-import { signedUrlOptions } from "../config.js";
 import { ChecksumJob, DownloadFile, DownloadJob } from "../download-schema.js";
 import { File, Part, StorageProvider } from "../entity.js";
 import { _Server, _ServerSocket } from "../socket.js";
-import { deleteFile } from "../storage/base.js";
+import { deleteFile, getDownloadUrl } from "../storage/base.js";
 import { _BucketObject, listObjects, makeS3Client } from "../storage/s3.js";
 import { DownloadCompleteError } from "../utils/errors.js";
 import { getRangeFromPathname } from "./download-parse.js";
@@ -22,6 +20,7 @@ export class DownloadServer {
   isLooping: boolean;
 
   downloads: Set<string> = new Set();
+  checksums: Set<string> = new Set();
 
   constructor(io: _Server) {
     this.io = io;
@@ -78,6 +77,7 @@ export class DownloadServer {
     this.isLooping = true;
 
     this.downloads.clear();
+    this.checksums.clear();
 
     const loop = this.loop.bind(this);
     setTimeout(loop, 1000);
@@ -105,20 +105,14 @@ export class DownloadServer {
     object: _BucketObject,
     part: Part
   ): Promise<DownloadJob> {
-    const input = {
-      Bucket: object.Bucket,
-      Key: object.Key,
-    };
-    const url = await getSignedUrl(
-      s3,
-      new GetObjectCommand(input),
-      signedUrlOptions
-    );
+    if (object.Key === undefined) {
+      throw new Error('"object.Key" is undefined');
+    }
     const downloadJob: DownloadJob = {
       n: part.file.n,
       storageProviderId,
       bucket: object.Bucket,
-      url,
+      url: await getDownloadUrl(s3, object.Bucket, object.Key),
       range: part.range,
       path: part.file.path,
       checksumMD5: part.checksumMD5,
@@ -131,13 +125,12 @@ export class DownloadServer {
     const { controller } = this.io;
     const s3 = makeS3Client(storageProvider);
 
-    const checksums: Set<string> = new Set();
     const checkChecksumJob = async (file: File): Promise<void> => {
       const checksumSHA256 = file.checksumSHA256;
       if (checksumSHA256 !== null) {
-        if (!checksums.has(checksumSHA256)) {
+        if (!this.checksums.has(checksumSHA256)) {
           await this.submitChecksumJob(file);
-          checksums.add(checksumSHA256);
+          this.checksums.add(checksumSHA256);
         }
       }
     };

@@ -115,6 +115,8 @@ export class StorageProvider {
 
   @Column("varchar", { nullable: true, default: null })
   bucketLocationConstraint: string | null;
+  @Column("varchar", { nullable: true, default: null })
+  backblazeDownloadUrl: string | null;
 
   constructor({
     id,
@@ -123,6 +125,7 @@ export class StorageProvider {
     accessKeyId,
     secretAccessKey,
     bucketLocationConstraint,
+    backblazeDownloadUrl,
   }: Partial<Storage>) {
     this.id = id!;
     this.endpoint = endpoint!;
@@ -130,6 +133,7 @@ export class StorageProvider {
     this.accessKeyId = accessKeyId!;
     this.secretAccessKey = secretAccessKey!;
     this.bucketLocationConstraint = bucketLocationConstraint || null;
+    this.backblazeDownloadUrl = backblazeDownloadUrl || null;
   }
 
   get configuration(): S3ClientConfig {

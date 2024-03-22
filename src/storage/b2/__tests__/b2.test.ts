@@ -4,11 +4,13 @@ import {
 
 import { jest } from "@jest/globals";
 
-import { client } from "../../utils/http-client.js";
+import { client } from "../../../utils/http-client.js";
+import { authorizeAccount, AuthorizeAccountResponse } from "../authorize-account.js";
 import {
-    authorizeAccount, AuthorizeAccountResponse, createBucket, defaultServerSideEncryption,
-    deleteFileVersion, headFileByName, keepOnlyLastVersion
-} from "../b2.js";
+    createBucket, defaultServerSideEncryption, keepOnlyLastVersion
+} from "../create-bucket.js";
+import { deleteFileVersion } from "../delete-file.js";
+import { headFileByName } from "../head-file-by-name.js";
 
 describe("b2 api", () => {
   const accountId = "unicorns";

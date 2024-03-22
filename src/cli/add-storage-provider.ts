@@ -34,6 +34,10 @@ export const makeAddStorageProviderCommand = (): Command => {
       "--bucket-location-constraint <string>",
       "The location constraint to use when creating new buckets"
     )
+    .option(
+      "--backblaze-download-url <string>",
+      "Use this download url instead"
+    )
     .showHelpAfterError()
     .action(async () => {
       const options = command.opts();
@@ -49,6 +53,7 @@ export const makeAddStorageProviderCommand = (): Command => {
         secretAccessKey: options["secretAccessKey"],
         endpoint: options["endpoint"],
         bucketLocationConstraint: options["bucketLocationConstraint"],
+        backblazeDownloadUrl: options["backblazeDownloadUrl"],
       });
       await dataSource.manager.save(storageProvider);
     });
