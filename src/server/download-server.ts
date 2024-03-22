@@ -202,7 +202,7 @@ export class DownloadServer {
         debug("could not parse object %o: %O", object, error);
       }
 
-      if (downloadJobs.length > 1000) {
+      if (downloadJobs.length >= 10) {
         this.sendDownloadJobs(downloadJobs);
         downloadJobs = [];
       }

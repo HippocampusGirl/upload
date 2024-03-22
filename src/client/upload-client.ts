@@ -359,7 +359,7 @@ export class UploadClient {
       )) {
         uploadRequest.path = relativePath;
         uploadRequests.push(uploadRequest);
-        if (uploadRequests.length > 10) {
+        if (uploadRequests.length >= 10) {
           promises.push(this.createUploadJobs(path, uploadRequests));
           uploadRequests = [];
         }
