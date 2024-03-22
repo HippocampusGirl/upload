@@ -1,6 +1,6 @@
 import { Command, Option } from "commander";
 
-import { getDataSource } from "./data-source.js";
+import { getDataSource } from "../data-source.js";
 
 export const makeSynchronizeCommand = (): Command => {
   const command = new Command();

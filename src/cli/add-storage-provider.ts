@@ -1,7 +1,7 @@
-import { Command, Option } from 'commander';
+import { Command, Option } from "commander";
 
-import { getDataSource } from './data-source.js';
-import { StorageProvider } from './entity.js';
+import { getDataSource } from "../data-source.js";
+import { StorageProvider } from "../entity.js";
 
 export const makeAddStorageProviderCommand = (): Command => {
   const command = new Command();

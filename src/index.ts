@@ -6,13 +6,13 @@ import { Command } from "commander";
 import Debug from "debug";
 import { isMainThread } from "node:worker_threads";
 
-import { makeAddStorageProviderCommand } from "./add-storage-provider.js";
+import { makeAddStorageProviderCommand } from "./cli/add-storage-provider.js";
+import { makeCreateTokenCommand } from "./cli/create-token.js";
+import { makeSynchronizeCommand } from "./cli/synchronize.js";
 import { makeDownloadClientCommand } from "./client/download-client.js";
 import { makeUploadClientCommand } from "./client/upload-client.js";
 import { worker } from "./client/worker.js";
-import { makeCreateTokenCommand } from "./create-token.js";
 import { makeServeCommand } from "./server/serve.js";
-import { makeSynchronizeCommand } from "./synchronize.js";
 
 export const command = new Command();
 command
