@@ -5,7 +5,10 @@ import { S3Client } from "@aws-sdk/client-s3";
 
 import { client, requestOptions } from "../utils/http-client.js";
 
-import type { OptionsOfJSONResponseBody } from "got";
+import type {
+  OptionsOfJSONResponseBody,
+  OptionsOfUnknownResponseBody,
+} from "got";
 const debug = Debug("storage");
 
 interface LifecycleRule {
@@ -161,6 +164,120 @@ export const createBucket = async (
   return createBucketResponse;
 };
 
+interface FileVersion {
+  fileName: string;
+  fileId: string;
+}
+interface HeadFileByNameResponse extends FileVersion {
+  checksumSHA1: string;
+}
+const headFileByNameResponseSchema: ObjectSchema<HeadFileByNameResponse> =
+  Joi.object({
+    fileName: Joi.string().required(),
+    fileId: Joi.string().required(),
+    checksumSHA1: Joi.string().required(),
+  }).unknown();
+/**
+ * Retrieves the metadata of a file by its name from a specific bucket
+ * using an undocumented HEAD request as per
+ * https://github.com/Backblaze/b2-sdk-python/issues/143#issuecomment-657411328
+ *
+ * @param authorizeAccountResponse - The response object containing the account authorization information.
+ * @param bucketName - The name of the bucket where the file is located.
+ * @param fileName - The name of the file to retrieve.
+ * @returns A promise that resolves to the metadata of the file, or null if the file does not exist.
+ * @throws An error if the retrieved file name does not match the expected file name.
+ */
+export const headFileByName = async (
+  authorizeAccountResponse: AuthorizeAccountResponse,
+  bucketName: string,
+  fileName: string
+): Promise<HeadFileByNameResponse | null> => {
+  const { apiInfo, authorizationToken } = authorizeAccountResponse;
+  const apiUrl = apiInfo.storageApi.apiUrl;
+  const url = new URL(`/file/${bucketName}/${fileName}`, apiUrl);
+  const options: OptionsOfUnknownResponseBody = {
+    ...requestOptions,
+    url,
+    headers: {
+      Authorization: authorizationToken,
+    },
+    isStream: false,
+    resolveBodyOnly: false,
+  };
+  const response = await client.head(options);
+  if (response.statusCode === 404) {
+    return null;
+  }
+  const headfileName = response.headers["x-bz-file-name"];
+  if (headfileName !== fileName) {
+    throw new Error(
+      `Expected file name ${fileName} but received ${headfileName}`
+    );
+  }
+  const fileId = response.headers["x-bz-file-id"];
+  const checksumSHA1 = response.headers["x-bz-content-sha1"];
+  const headFileByNameResponse = Joi.attempt(
+    {
+      fileName,
+      fileId,
+      checksumSHA1,
+    },
+    headFileByNameResponseSchema
+  );
+  return headFileByNameResponse;
+};
+
+interface DeleteFileVersionRequest extends FileVersion {
+  bypassGovernance: false;
+}
+const deleteFileVersionRequestSchema: ObjectSchema<DeleteFileVersionRequest> =
+  Joi.object({
+    fileName: Joi.string().required(),
+    fileId: Joi.string().required(),
+    bypassGovernance: Joi.boolean().valid(false).required(),
+  });
+interface DeleteFileVersionResponse extends FileVersion {}
+const deleteFileVersionResponseSchema: ObjectSchema<DeleteFileVersionResponse> =
+  Joi.object({
+    fileName: Joi.string().required(),
+    fileId: Joi.string().required(),
+  }).unknown();
+export const deleteFileVersion = async (
+  authorizeAccountResponse: AuthorizeAccountResponse,
+  fileVersion: FileVersion
+): Promise<DeleteFileVersionResponse> => {
+  const { apiInfo, authorizationToken } = authorizeAccountResponse;
+  const apiUrl = apiInfo.storageApi.apiUrl;
+  const url = new URL("b2api/v3/b2_delete_file_version", apiUrl);
+  const { fileName, fileId } = fileVersion;
+  const json = Joi.attempt(
+    {
+      fileName,
+      fileId,
+      bypassGovernance: false,
+    },
+    deleteFileVersionRequestSchema
+  );
+  const options: OptionsOfJSONResponseBody = {
+    ...requestOptions,
+    url,
+    json,
+    headers: {
+      Authorization: authorizationToken,
+    },
+    isStream: false,
+    resolveBodyOnly: false,
+    responseType: "json",
+  };
+  const response = await client.post(options);
+  const deleteFileVersionResponse = Joi.attempt(
+    response.body,
+    deleteFileVersionResponseSchema
+  );
+  return deleteFileVersionResponse;
+};
+
 export const createB2Bucket = async (
   s3: S3Client,
   bucket: string
@@ -176,4 +293,24 @@ export const createB2Bucket = async (
     debug("failed to create bucket %o: %O", bucket, error);
     throw new Error("Failed to create bucket");
   }
+};
+export const deleteB2File = async (
+  s3: S3Client,
+  bucket: string,
+  key: string
+): Promise<void> => {
+  const { accessKeyId, secretAccessKey } = await s3.config.credentials();
+  const authorizeAccountResponse = await authorizeAccount(
+    accessKeyId,
+    secretAccessKey
+  );
+  const fileVersion = await headFileByName(
+    authorizeAccountResponse,
+    bucket,
+    key
+  );
+  if (fileVersion === null) {
+    throw new Error(`File ${bucket} ${key} not found`);
+  }
+  await deleteFileVersion(authorizeAccountResponse, fileVersion);
 };

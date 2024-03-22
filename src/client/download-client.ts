@@ -302,11 +302,11 @@ class DownloadClient {
   async finalizeDownloadJob(downloadJob: CompletedDownloadJob): Promise<void> {
     this.progress.completePart(downloadJob);
 
-    debug(
-      "completed partial download for %s in range %s",
-      downloadJob.path,
-      downloadJob.range.toString()
-    );
+    // debug(
+    //   "completed partial download for %s in range %s",
+    //   downloadJob.path,
+    //   downloadJob.range.toString()
+    // );
 
     await this.controller.completePart(downloadJob.n, downloadJob);
     const error = await this.socket.emitWithAck(

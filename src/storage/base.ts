@@ -1,9 +1,9 @@
 import Debug from "debug";
 import { createHash } from "node:crypto";
 
-import { HeadBucketCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, HeadBucketCommand, S3Client } from "@aws-sdk/client-s3";
 
-import { createB2Bucket } from "./b2.js";
+import { createB2Bucket, deleteB2File } from "./b2.js";
 import { prefix } from "./prefix.js";
 import { createS3Bucket } from "./s3.js";
 
@@ -56,4 +56,22 @@ export const requireBucketName = async (
   }
 
   return bucket;
+};
+
+export const deleteFile = async (
+  s3: S3Client,
+  bucket: string,
+  key: string
+): Promise<unknown> => {
+  const endpointProvider = s3.config.endpoint;
+  if (!endpointProvider) {
+    throw new Error("S3Client endpoint is not defined");
+  }
+  const { hostname } = await endpointProvider();
+  if (hostname.endsWith("backblazeb2.com")) {
+    return deleteB2File(s3, bucket, key);
+  } else {
+    const input = { Bucket: bucket, Key: key };
+    return s3.send(new DeleteObjectCommand(input));
+  }
 };

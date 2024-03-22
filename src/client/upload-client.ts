@@ -267,11 +267,11 @@ export class UploadClient {
     } catch (error) {
       debug("error sending complete %o", error);
     }
-    debug(
-      "completed partial upload for %s in range %s",
-      uploadJob.path,
-      uploadJob.range.toString()
-    );
+    // debug(
+    //   "completed partial upload for %s in range %s",
+    //   uploadJob.path,
+    //   uploadJob.range.toString()
+    // );
     return uploadJob;
   }
 

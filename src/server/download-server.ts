@@ -1,7 +1,7 @@
 import Debug from "debug";
 import Joi from "joi";
 
-import { DeleteObjectCommand, GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 import { makeKey } from "../client/upload-parts.js";
@@ -9,6 +9,7 @@ import { signedUrlOptions } from "../config.js";
 import { ChecksumJob, DownloadFile, DownloadJob } from "../download-schema.js";
 import { File, Part, StorageProvider } from "../entity.js";
 import { _Server, _ServerSocket } from "../socket.js";
+import { deleteFile } from "../storage/base.js";
 import { _BucketObject, listObjects, makeS3Client } from "../storage/s3.js";
 import { DownloadCompleteError } from "../utils/errors.js";
 import { getRangeFromPathname } from "./download-parse.js";
@@ -47,12 +48,7 @@ export class DownloadServer {
         }
         const s3 = makeS3Client(storageProvider);
         try {
-          await s3.send(
-            new DeleteObjectCommand({
-              Bucket: downloadJob.bucket,
-              Key: makeKey(downloadJob),
-            })
-          );
+          await deleteFile(s3, downloadJob.bucket, makeKey(downloadJob));
         } catch (error) {
           debug(
             "could not delete part %o from storage provider: %O",
@@ -131,14 +127,6 @@ export class DownloadServer {
     debug("created download job %o", downloadJob);
     return downloadJob;
   }
-  async deleteObject(s3: S3Client, object: _BucketObject): Promise<void> {
-    await s3.send(
-      new DeleteObjectCommand({
-        Bucket: object.Bucket,
-        Key: object.Key,
-      })
-    );
-  }
   async checkDownloadJobs(storageProvider: StorageProvider): Promise<void> {
     const { controller } = this.io;
     const s3 = makeS3Client(storageProvider);
@@ -179,7 +167,7 @@ export class DownloadServer {
             object.Key,
             error
           );
-          await this.deleteObject(s3, object);
+          deleteFile(s3, object.Bucket, object.Key);
           continue;
         }
         if (range.size() !== object.Size) {
@@ -194,19 +182,18 @@ export class DownloadServer {
         const part = await controller.getPart(checksumMD5, range);
         if (part === null) {
           debug(
-            "deleting unknown file %o with checksum %o and range from %o to %o",
+            "deleting unknown file %o with checksum %o and range %o",
             object.Key,
             checksumMD5,
-            range.start,
-            range.end
+            range.toString()
           );
-          await this.deleteObject(s3, object);
+          deleteFile(s3, object.Bucket, object.Key);
           continue;
         }
         const file = part.file;
         if (file.verified) {
           debug("deleting part of verified file %o", object.Key);
-          await this.deleteObject(s3, object);
+          deleteFile(s3, object.Bucket, object.Key);
           continue;
         }
         checkChecksumJob(file);
