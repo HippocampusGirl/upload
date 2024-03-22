@@ -26,12 +26,10 @@ export class B2Storage extends S3Storage {
       bucket,
       key
     );
-    return getDownloadUrl(
-      authorizationToken,
-      bucketId,
-      key,
-      authorizationToken
-    );
+    const downloadUrl =
+      this.storageProvider.backblazeDownloadUrl ||
+      authorizeAccountResponse.apiInfo.storageApi.downloadUrl;
+    return getDownloadUrl(downloadUrl, bucketId, key, authorizationToken);
   }
   override async deleteFile(bucket: string, key: string): Promise<unknown> {
     const authorizeAccountResponse = await this.authorizeAccountResponse;

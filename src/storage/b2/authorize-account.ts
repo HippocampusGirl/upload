@@ -6,9 +6,11 @@ import type { OptionsOfJSONResponseBody } from "got";
 
 interface StorageApi {
   apiUrl: string;
+  downloadUrl: string;
 }
 const storageApiSchema: ObjectSchema<StorageApi> = Joi.object({
   apiUrl: Joi.string().uri({ scheme: "https" }).required(),
+  downloadUrl: Joi.string().uri({ scheme: "https" }).required(),
 }).unknown();
 interface ApiInfo {
   storageApi: StorageApi;

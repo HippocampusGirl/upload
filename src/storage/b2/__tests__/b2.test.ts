@@ -16,10 +16,11 @@ describe("b2 api", () => {
   const accountId = "unicorns";
   const authorizationToken = "foo";
   const apiUrl = "https://foo";
+  const downloadUrl = "https://baz";
   const authorizeAccountResponse: AuthorizeAccountResponse = {
     accountId,
     authorizationToken,
-    apiInfo: { storageApi: { apiUrl } },
+    apiInfo: { storageApi: { apiUrl, downloadUrl } },
   };
   it("can authorize account", async () => {
     const spy = jest.spyOn(client, "get");
@@ -40,6 +41,7 @@ describe("b2 api", () => {
               apiInfo: {
                 storageApi: {
                   apiUrl,
+                  downloadUrl,
                   absoluteMinimumPartSize: 5000000,
                   bucketId: null,
                   bucketName: null,
