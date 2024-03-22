@@ -3,8 +3,8 @@ export const getDownloadUrl = (
   bucket: string,
   fileName: string,
   authorizationToken: string
-): URL => {
+): string => {
   const url = new URL(`/file/${bucket}/${fileName}`, downloadUrl);
   url.searchParams.set("Authorization", authorizationToken);
-  return url;
+  return url.toString();
 };

@@ -12,14 +12,13 @@ import { promisify } from "node:util";
 import { Server as SocketServer, Socket } from "socket.io";
 import msgpackParser from "socket.io-msgpack-parser";
 
-import { S3Client } from "@aws-sdk/client-s3";
 import { createAdapter, setupPrimary } from "@socket.io/cluster-adapter";
 import sticky from "@socket.io/sticky";
 
 import { Controller } from "../controller.js";
 import { getDataSource } from "../data-source.js";
 import { _Server } from "../socket.js";
-import { requireBucketName } from "../storage/base.js";
+import { Storage } from "../storage/base.js";
 import { UnauthorizedError } from "../utils/errors.js";
 import { tsNodeArgv } from "../utils/loader.js";
 import { Payload, UploadPayload } from "../utils/payload.js";
@@ -35,7 +34,7 @@ declare module "socket.io" {
 interface ExtendedSocket {
   bucket: string;
   payload: Payload;
-  s3: S3Client | undefined;
+  storage: Storage | undefined;
 }
 interface ExtendedServer {
   controller: Controller;
@@ -234,9 +233,9 @@ class Server {
           return next(new UnauthorizedError("Invalid token storage provider"));
         }
         try {
-          const { s3 } = storageProvider;
-          socket.bucket = await requireBucketName(s3, n);
-          socket.s3 = s3;
+          const { storage } = storageProvider;
+          socket.bucket = await storage.requireBucketName(n);
+          socket.storage = storage;
         } catch (error) {
           return next(new UnauthorizedError("Cannot create bucket for token"));
         }

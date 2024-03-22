@@ -2,6 +2,10 @@ import { Column, Entity, PrimaryColumn } from "typeorm";
 
 import { S3Client, S3ClientConfig } from "@aws-sdk/client-s3";
 
+import { B2Storage } from "../storage/b2/base.js";
+import { Storage } from "../storage/base.js";
+import { S3Storage } from "../storage/s3.js";
+
 @Entity()
 export class StorageProvider {
   @PrimaryColumn("varchar")
@@ -29,7 +33,7 @@ export class StorageProvider {
     secretAccessKey,
     bucketLocationConstraint,
     backblazeDownloadUrl,
-  }: Partial<Storage>) {
+  }: Partial<StorageProvider>) {
     this.id = id!;
     this.endpoint = endpoint!;
     this.region = region!;
@@ -51,11 +55,20 @@ export class StorageProvider {
   }
 
   get s3(): S3Client {
-    const s3 = new S3Client({
+    return new S3Client({
       forcePathStyle: true,
       ...this.s3Configuration,
     });
-    s3.bucketLocationConstraint = this.bucketLocationConstraint;
-    return s3;
+  }
+
+  get isBackblaze(): boolean {
+    return this.endpoint.endsWith("backblazeb2.com");
+  }
+
+  get storage(): Storage {
+    if (this.isBackblaze) {
+      return new B2Storage(this);
+    }
+    return new S3Storage(this);
   }
 }

@@ -1,16 +1,13 @@
 import Debug from "debug";
 import Joi from "joi";
 
-import { S3Client } from "@aws-sdk/client-s3";
-
 import { makeKey } from "../client/upload-parts.js";
 import { ChecksumJob, DownloadFile, DownloadJob } from "../download-schema.js";
 import { File } from "../entity/file.js";
 import { Part } from "../entity/part.js";
 import { StorageProvider } from "../entity/storage-provider.js";
 import { _Server, _ServerSocket } from "../socket.js";
-import { deleteFile, getDownloadUrl } from "../storage/base.js";
-import { _BucketObject, listObjects } from "../storage/s3.js";
+import { _BucketObject, Storage } from "../storage/base.js";
 import { DownloadCompleteError } from "../utils/errors.js";
 import { getRangeFromPathname } from "./download-parse.js";
 
@@ -47,9 +44,9 @@ export class DownloadServer {
           callback({ error: "unknown-storage-provider" });
           return;
         }
-        const { s3 } = storageProvider;
+        const { storage } = storageProvider;
         try {
-          await deleteFile(s3, downloadJob.bucket, makeKey(downloadJob));
+          await storage.deleteFile(downloadJob.bucket, makeKey(downloadJob));
         } catch (error) {
           debug(
             "could not delete part %o from storage provider: %O",
@@ -102,8 +99,7 @@ export class DownloadServer {
   }
 
   async createDownloadJob(
-    storageProviderId: string,
-    s3: S3Client,
+    storage: Storage,
     object: _BucketObject,
     part: Part
   ): Promise<DownloadJob> {
@@ -112,9 +108,9 @@ export class DownloadServer {
     }
     const downloadJob: DownloadJob = {
       n: part.file.n,
-      storageProviderId,
+      storageProviderId: storage.storageProvider.id,
       bucket: object.Bucket,
-      url: await getDownloadUrl(s3, object.Bucket, object.Key),
+      url: await storage.getDownloadUrl(object.Bucket, object.Key),
       range: part.range,
       path: part.file.path,
       checksumMD5: part.checksumMD5,
@@ -125,7 +121,7 @@ export class DownloadServer {
   }
   async checkDownloadJobs(storageProvider: StorageProvider): Promise<void> {
     const { controller } = this.io;
-    const { s3 } = storageProvider;
+    const { storage } = storageProvider;
 
     const checkChecksumJob = async (file: File): Promise<void> => {
       const checksumSHA256 = file.checksumSHA256;
@@ -138,7 +134,7 @@ export class DownloadServer {
     };
 
     let downloadJobs: DownloadJob[] = [];
-    for await (const object of listObjects(s3)) {
+    for await (const object of storage.listObjects()) {
       try {
         if (object.Bucket === undefined) {
           throw new Error('"object.Bucket" is undefined');
@@ -162,7 +158,7 @@ export class DownloadServer {
             object.Key,
             error
           );
-          deleteFile(s3, object.Bucket, object.Key);
+          await storage.deleteFile(object.Bucket, object.Key);
           continue;
         }
         if (range.size() !== object.Size) {
@@ -182,13 +178,13 @@ export class DownloadServer {
             checksumMD5,
             range.toString()
           );
-          deleteFile(s3, object.Bucket, object.Key);
+          await storage.deleteFile(object.Bucket, object.Key);
           continue;
         }
         const file = part.file;
         if (file.verified) {
           debug("deleting part of verified file %o", object.Key);
-          deleteFile(s3, object.Bucket, object.Key);
+          await storage.deleteFile(object.Bucket, object.Key);
           continue;
         }
         checkChecksumJob(file);
@@ -201,9 +197,7 @@ export class DownloadServer {
         }
         this.downloads.add(key);
 
-        downloadJobs.push(
-          await this.createDownloadJob(storageProvider.id, s3, object, part)
-        );
+        downloadJobs.push(await this.createDownloadJob(storage, object, part));
       } catch (error) {
         debug("could not parse object %o: %O", object, error);
       }
