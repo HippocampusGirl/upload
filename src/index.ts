@@ -4,8 +4,7 @@ import "reflect-metadata";
 
 import { Command } from "commander";
 import Debug from "debug";
-import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import esMain from "es-main";
 import { isMainThread } from "node:worker_threads";
 
 import { makeAddStorageProviderCommand } from "./cli/add-storage-provider.js";
@@ -37,10 +36,7 @@ command
     }
   });
 
-const fileName = process.argv[1];
-export const isMainModule =
-  fileName !== undefined &&
-  fileURLToPath(import.meta.url) === resolve(fileName);
+export const isMainModule = esMain(import.meta);
 if (isMainModule) {
   if (isMainThread) {
     command.parse(process.argv);
