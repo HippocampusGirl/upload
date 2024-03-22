@@ -1,11 +1,11 @@
-import Debug from 'debug';
+import Debug from "debug";
 
 import {
     _Object, BucketLocationConstraint, CreateBucketCommand, CreateBucketCommandInput,
     HeadBucketCommand, ListBucketsCommand, ListObjectsCommand, ListObjectsCommandInput, S3Client
-} from '@aws-sdk/client-s3';
+} from "@aws-sdk/client-s3";
 
-import { StorageProvider } from '../entity.js';
+import { StorageProvider } from "../entity.js";
 
 // Allow socket to store payload
 declare module "@aws-sdk/client-s3" {
@@ -94,13 +94,13 @@ export async function* listObjects(
   s3: S3Client
 ): AsyncGenerator<_BucketObject, void, undefined> {
   const result = await s3.send(new ListBucketsCommand({}));
-  const buckets = result.Buckets?.reduce((previousValue, bucket) => {
+  const buckets: string[] = [];
+  for (const bucket of result.Buckets ?? []) {
     if (bucket.Name?.startsWith(prefix)) {
-      previousValue.push(bucket.Name);
+      buckets.push(bucket.Name);
     }
-    return previousValue;
-  }, new Array<string>());
-  if (buckets === undefined) {
+  }
+  if (!buckets) {
     return;
   }
   debug("listing %o buckets", buckets.length);
