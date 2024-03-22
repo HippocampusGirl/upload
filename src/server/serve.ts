@@ -19,11 +19,12 @@ import sticky from "@socket.io/sticky";
 import { Controller } from "../controller.js";
 import { getDataSource } from "../data-source.js";
 import { _Server } from "../socket.js";
+import { requireBucketName } from "../storage/base.js";
+import { makeS3Client } from "../storage/s3.js";
 import { UnauthorizedError } from "../utils/errors.js";
 import { tsNodeArgv } from "../utils/loader.js";
 import { Payload, UploadPayload } from "../utils/payload.js";
 import { signal } from "../utils/signal.js";
-import { makeS3Client, requireBucketName } from "../utils/storage.js";
 import { DownloadServer } from "./download-server.js";
 import { UploadServer } from "./upload-server.js";
 
@@ -233,8 +234,12 @@ class Server {
         if (storageProvider === null) {
           return next(new UnauthorizedError("Invalid token storage provider"));
         }
-        socket.s3 = makeS3Client(storageProvider);
-        socket.bucket = await requireBucketName(socket.s3, n);
+        try {
+          socket.s3 = makeS3Client(storageProvider);
+          socket.bucket = await requireBucketName(socket.s3, n);
+        } catch (error) {
+          return next(new UnauthorizedError("Cannot create bucket for token"));
+        }
         socket.payload = { t, n, s };
       } else if (t === "d") {
         socket.payload = { t };

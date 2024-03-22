@@ -9,8 +9,8 @@ import { signedUrlOptions } from "../config.js";
 import { ChecksumJob, DownloadFile, DownloadJob } from "../download-schema.js";
 import { File, Part, StorageProvider } from "../entity.js";
 import { _Server, _ServerSocket } from "../socket.js";
+import { _BucketObject, listObjects, makeS3Client } from "../storage/s3.js";
 import { DownloadCompleteError } from "../utils/errors.js";
-import { _BucketObject, listObjects, makeS3Client } from "../utils/storage.js";
 import { getRangeFromPathname } from "./download-parse.js";
 
 const debug = Debug("server");

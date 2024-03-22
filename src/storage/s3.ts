@@ -2,10 +2,11 @@ import Debug from "debug";
 
 import {
     _Object, BucketLocationConstraint, CreateBucketCommand, CreateBucketCommandInput,
-    HeadBucketCommand, ListBucketsCommand, ListObjectsCommand, ListObjectsCommandInput, S3Client
+    ListBucketsCommand, ListObjectsCommand, ListObjectsCommandInput, S3Client
 } from "@aws-sdk/client-s3";
 
 import { StorageProvider } from "../entity.js";
+import { prefix } from "./prefix.js";
 
 // Allow socket to store payload
 declare module "@aws-sdk/client-s3" {
@@ -16,7 +17,6 @@ interface ExtendedS3Client {
 }
 
 const debug = Debug("storage");
-export const prefix = "upload-";
 
 export const makeS3Client = (storageProvider: StorageProvider): S3Client => {
   const s3 = new S3Client({
@@ -27,34 +27,24 @@ export const makeS3Client = (storageProvider: StorageProvider): S3Client => {
   return s3;
 };
 
-export const requireBucketName = async (
+export const createS3Bucket = async (
   s3: S3Client,
-  name: string
-): Promise<string> => {
-  const bucket = `${prefix}${name}`;
-  const bucketInput = { Bucket: bucket };
-
-  try {
-    await s3.send(new HeadBucketCommand(bucketInput));
-  } catch (error) {
-    const input: CreateBucketCommandInput = { ...bucketInput };
-    if (s3.bucketLocationConstraint) {
-      input.CreateBucketConfiguration = {
-        LocationConstraint:
-          s3.bucketLocationConstraint as BucketLocationConstraint,
-      };
-    }
-    try {
-      await s3.send(new CreateBucketCommand(input));
-    } catch (error) {
-      debug("failed to create bucket with input %o: %O", input, error);
-      throw new Error("Failed to create bucket");
-    }
+  bucket: string
+): Promise<void> => {
+  const input: CreateBucketCommandInput = { Bucket: bucket };
+  if (s3.bucketLocationConstraint) {
+    input.CreateBucketConfiguration = {
+      LocationConstraint:
+        s3.bucketLocationConstraint as BucketLocationConstraint,
+    };
   }
-
-  return bucket;
+  try {
+    await s3.send(new CreateBucketCommand(input));
+  } catch (error) {
+    debug("failed to create bucket with input %o: %O", input, error);
+    throw new Error("Failed to create bucket");
+  }
 };
-
 async function* listObjectsInBucket(
   s3: S3Client,
   bucket: string

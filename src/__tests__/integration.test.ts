@@ -13,8 +13,8 @@ import { LocalstackContainer, StartedLocalStackContainer } from "@testcontainers
 import { downloadClient } from "../client/download-client.js";
 import { command } from "../index.js";
 import { server } from "../server/serve.js";
+import { makeBucketName } from "../storage/base.js";
 import { calculateChecksum } from "../utils/fs.js";
-import { prefix } from "../utils/storage.js";
 
 const getPort = (): Promise<number> => {
   return new Promise((resolve, reject) => {
@@ -48,6 +48,7 @@ describe("application", () => {
   let downloadFile: string;
 
   const storageProviderId = "local";
+  const accessKeyId = "does-not-matter";
   const tokenName = "test";
   const uploadFileName = "upload-file";
 
@@ -79,7 +80,7 @@ describe("application", () => {
     await runShellCommand(`dd if=/dev/urandom of=${uploadFile} bs=64M count=1`);
     uploadFileChecksumSHA256 = await calculateChecksum(uploadFile, "sha256");
 
-    bucket = `${prefix}${tokenName}`;
+    bucket = makeBucketName(tokenName, accessKeyId);
     downloadFile = join(temporaryDirectory, bucket, uploadFileName);
   }, 10 * 60 * 1000);
   afterAll(async () => {
@@ -127,9 +128,9 @@ describe("application", () => {
       "--region",
       "us-east-1",
       "--accessKeyId",
-      "access",
+      accessKeyId,
       "--secretAccessKey",
-      "secret",
+      "does-not-matter",
     ]);
   });
 
