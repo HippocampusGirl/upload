@@ -42,16 +42,28 @@ export const defaultServerSideEncryption: ServerSideEncryptionSetting = {
   algorithm: "AES256",
 };
 
+interface StorageApi {
+  apiUrl: string;
+}
+const storageApiSchema: ObjectSchema<StorageApi> = Joi.object({
+  apiUrl: Joi.string().uri({ scheme: "https" }).required(),
+}).unknown();
+interface ApiInfo {
+  storageApi: StorageApi;
+}
+const apiInfoSchema: ObjectSchema<ApiInfo> = Joi.object({
+  storageApi: storageApiSchema.required(),
+}).unknown();
 export interface AuthorizeAccountResponse {
   accountId: string;
   authorizationToken: string;
-  apiUrl: string;
+  apiInfo: ApiInfo;
 }
 const authorizeAccountResponseSchema: ObjectSchema<AuthorizeAccountResponse> =
   Joi.object({
     accountId: Joi.string().required(),
     authorizationToken: Joi.string().required(),
-    apiUrl: Joi.string().uri({ scheme: "https" }).required(),
+    apiInfo: apiInfoSchema.required(),
   }).unknown();
 
 const apiUrl: string = "https://api.backblazeb2.com";
@@ -113,7 +125,8 @@ export const createBucket = async (
   authorizeAccountResponse: AuthorizeAccountResponse,
   bucketName: string
 ): Promise<CreateBucketResponse> => {
-  const { apiUrl, authorizationToken, accountId } = authorizeAccountResponse;
+  const { apiInfo, authorizationToken, accountId } = authorizeAccountResponse;
+  const apiUrl = apiInfo.storageApi.apiUrl;
   const url = new URL("b2api/v3/b2_create_bucket", apiUrl);
   const json = Joi.attempt(
     {

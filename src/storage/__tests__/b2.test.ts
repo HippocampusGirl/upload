@@ -11,10 +11,11 @@ import {
 describe("b2 api", () => {
   const accountId = "unicorns";
   const authorizationToken = "foo";
+  const apiUrl = "https://foo";
   const authorizeAccountResponse: AuthorizeAccountResponse = {
     accountId,
     authorizationToken,
-    apiUrl: "https://foo",
+    apiInfo: { storageApi: { apiUrl } },
   };
   it("can authorize account", async () => {
     const spy = jest.spyOn(client, "get");
@@ -30,7 +31,17 @@ describe("b2 api", () => {
         return new Promise((resolve) => {
           resolve({
             body: {
-              ...authorizeAccountResponse,
+              accountId,
+              authorizationToken,
+              apiInfo: {
+                storageApi: {
+                  apiUrl,
+                  absoluteMinimumPartSize: 5000000,
+                  bucketId: null,
+                  bucketName: null,
+                  capabilities: [],
+                },
+              },
               downloadUrl: "https://bar",
             },
           });
@@ -52,7 +63,7 @@ describe("b2 api", () => {
       (o: unknown): CancelableRequest<Response<unknown>> => {
         const options = o as OptionsOfJSONResponseBody;
         expect(options.url).toMatchObject(
-          new URL("https://api.backblazeb2.com/b2api/v3/b2_create_bucket")
+          new URL("b2api/v3/b2_create_bucket", apiUrl)
         );
         expect(options.headers).toMatchObject({
           Authorization: authorizationToken,
