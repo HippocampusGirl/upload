@@ -10,12 +10,6 @@ interface GetDownloadAuthorizationRequest {
   fileNamePrefix: string;
   validDurationInSeconds: number;
 }
-const getDownloadAuthorizationRequestSchema: ObjectSchema<GetDownloadAuthorizationRequest> =
-  Joi.object({
-    bucketId: Joi.string().required(),
-    fileNamePrefix: Joi.string().required(),
-    validDurationInSeconds: Joi.number().min(1).max(604800).required(),
-  });
 interface GetDownloadAuthorizationResponse {
   authorizationToken: string;
 }
@@ -28,13 +22,14 @@ export const getDownloadAuthorizationToken = async (
   bucketId: string,
   fileNamePrefix: string
 ): Promise<string> => {
-  const { apiInfo, authorizationToken, accountId } = authorizeAccountResponse;
+  const { apiInfo, authorizationToken } = authorizeAccountResponse;
   const apiUrl = apiInfo.storageApi.apiUrl;
   const url = new URL("b2api/v3/b2_get_download_authorization", apiUrl);
-  const json = Joi.attempt(
-    { accountId, bucketId, fileNamePrefix, validDurationInSeconds: expiresIn },
-    getDownloadAuthorizationRequestSchema
-  );
+  const json: GetDownloadAuthorizationRequest = {
+    bucketId,
+    fileNamePrefix,
+    validDurationInSeconds: expiresIn,
+  };
   const options: OptionsOfJSONResponseBody = {
     ...requestOptions,
     url,

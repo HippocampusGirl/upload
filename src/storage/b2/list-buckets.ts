@@ -8,10 +8,6 @@ interface ListBucketsRequest {
   accountId: string;
   bucketName: string;
 }
-const listBucketsRequestSchema: ObjectSchema<ListBucketsRequest> = Joi.object({
-  accountId: Joi.string().required(),
-  bucketName: Joi.string().required(),
-});
 interface Bucket {
   bucketId: string;
   bucketName: string;
@@ -34,7 +30,7 @@ export const listBucket = async (
   const { apiInfo, authorizationToken, accountId } = authorizeAccountResponse;
   const apiUrl = apiInfo.storageApi.apiUrl;
   const url = new URL("b2api/v3/b2_list_buckets", apiUrl);
-  const json = Joi.attempt({ accountId, bucketName }, listBucketsRequestSchema);
+  const json: ListBucketsRequest = { accountId, bucketName };
   const options: OptionsOfJSONResponseBody = {
     ...requestOptions,
     url,

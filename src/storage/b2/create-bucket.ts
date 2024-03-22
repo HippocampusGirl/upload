@@ -9,11 +9,6 @@ interface LifecycleRule {
   daysFromUploadingToHiding: number | null;
   fileNamePrefix: string;
 }
-const lifecycleRuleSchema: ObjectSchema<LifecycleRule> = Joi.object({
-  daysFromHidingToDeleting: Joi.number().required(),
-  daysFromUploadingToHiding: Joi.number().allow(null).required(),
-  fileNamePrefix: Joi.string().allow("").required(),
-});
 /**
  * Represents a lifecycle rule to keep only the last version of a file.
  * Copied from https://www.backblaze.com/docs/cloud-storage-lifecycle-rules
@@ -28,11 +23,6 @@ interface ServerSideEncryptionSetting {
   mode: "SSE-B2";
   algorithm: "AES256";
 }
-const serverSideEncryptionSettingSchema: ObjectSchema<ServerSideEncryptionSetting> =
-  Joi.object({
-    mode: Joi.string().valid("SSE-B2").required(),
-    algorithm: Joi.string().valid("AES256").required(),
-  });
 export const defaultServerSideEncryption: ServerSideEncryptionSetting = {
   mode: "SSE-B2",
   algorithm: "AES256",
@@ -49,19 +39,6 @@ interface CreateBucketRequest {
   replicationConfiguration: Record<string, never>;
   defaultServerSideEncryption: ServerSideEncryptionSetting;
 }
-const createBucketRequestSchema: ObjectSchema<CreateBucketRequest> = Joi.object(
-  {
-    accountId: Joi.string().required(),
-    bucketName: Joi.string().required(),
-    bucketType: Joi.string().valid("allPrivate").required(),
-    bucketInfo: Joi.object().empty().required(),
-    corsRules: Joi.array().empty().required(),
-    fileLockEnabled: Joi.boolean().valid(false).required(),
-    lifecycleRules: Joi.array().items(lifecycleRuleSchema),
-    replicationConfiguration: Joi.object().empty().required(),
-    defaultServerSideEncryption: serverSideEncryptionSettingSchema,
-  }
-);
 interface CreateBucketResponse {
   options: "s3"[];
 }
@@ -76,20 +53,17 @@ export const createBucket = async (
   const { apiInfo, authorizationToken, accountId } = authorizeAccountResponse;
   const apiUrl = apiInfo.storageApi.apiUrl;
   const url = new URL("b2api/v3/b2_create_bucket", apiUrl);
-  const json = Joi.attempt(
-    {
-      accountId,
-      bucketName,
-      bucketType: "allPrivate",
-      bucketInfo: {},
-      corsRules: [],
-      fileLockEnabled: false,
-      lifecycleRules: [keepOnlyLastVersion],
-      replicationConfiguration: {},
-      defaultServerSideEncryption,
-    },
-    createBucketRequestSchema
-  );
+  const json: CreateBucketRequest = {
+    accountId,
+    bucketName,
+    bucketType: "allPrivate",
+    bucketInfo: {},
+    corsRules: [],
+    fileLockEnabled: false,
+    lifecycleRules: [keepOnlyLastVersion],
+    replicationConfiguration: {},
+    defaultServerSideEncryption,
+  };
   const options: OptionsOfJSONResponseBody = {
     ...requestOptions,
     url,
