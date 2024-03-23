@@ -1,6 +1,5 @@
 import { debug } from "console";
 import { Stats } from "fs";
-import jwt from "jsonwebtoken";
 import net from "net";
 import { exec } from "node:child_process";
 import { lstat, mkdtemp, readFile, rm } from "node:fs/promises";
@@ -10,6 +9,7 @@ import { promisify } from "node:util";
 
 import { jest } from "@jest/globals";
 import { LocalstackContainer, StartedLocalStackContainer } from "@testcontainers/localstack";
+import { decode, verify } from "@tsndr/cloudflare-worker-jwt";
 
 import { downloadClient } from "../client/download-client.js";
 import { command } from "../index.js";
@@ -148,7 +148,8 @@ describe("application", () => {
     uploadToken = spy.mock.calls[0]![0] as string;
     spy.mockRestore();
 
-    const payload = jwt.verify(uploadToken, publicKey);
+    expect(verify(downloadToken, publicKey)).toBeTruthy();
+    const payload = decode(downloadToken);
     expect(payload).toMatchObject({
       n: tokenName,
       t: "u",
@@ -170,7 +171,8 @@ describe("application", () => {
     downloadToken = spy.mock.calls[0]![0] as string;
     spy.mockRestore();
 
-    const payload = jwt.verify(downloadToken, publicKey);
+    expect(verify(downloadToken, publicKey)).toBeTruthy();
+    const payload = decode(downloadToken);
     expect(payload).toMatchObject({
       t: "d",
     });

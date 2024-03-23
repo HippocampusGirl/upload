@@ -7,9 +7,9 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-import { signedUrlOptions } from "../config.js";
 import { _BucketObject, Storage } from "./base.js";
 import { prefix } from "./bucket-name.js";
+import { signedUrlOptions } from "./ttl.js";
 
 const debug = Debug("storage");
 
@@ -34,7 +34,7 @@ export class S3Storage extends Storage {
     };
     return getSignedUrl(s3, new PutObjectCommand(input), signedUrlOptions);
   }
-  async getDownloadUrl(bucket: string, key: string): Promise<string> {
+  async getAPIDownloadUrl(bucket: string, key: string): Promise<string> {
     const { s3 } = this.storageProvider;
     const input = {
       Bucket: bucket,

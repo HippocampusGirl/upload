@@ -1,4 +1,4 @@
-import Joi from 'joi';
+import Joi, { AlternativesSchema, ObjectSchema } from "joi";
 
 export interface UploadPayload {
   t: "u";
@@ -10,18 +10,16 @@ interface DownloadPayload {
 }
 export type Payload = UploadPayload | DownloadPayload;
 
-export const nameSchema = Joi.string().alphanum().case("lower");
-export const uploadPayloadSchema = Joi.object({
+const nameSchema = Joi.string().alphanum().case("lower");
+export const uploadPayloadSchema: ObjectSchema<UploadPayload> = Joi.object({
   t: Joi.string().valid("u").required(),
   n: nameSchema.required(),
   s: nameSchema.required(),
-  iat: Joi.number().integer(),
-});
-export const downloadPayloadSchema = Joi.object({
+}).unknown();
+export const downloadPayloadSchema: ObjectSchema<DownloadPayload> = Joi.object({
   t: Joi.string().valid("d").required(),
-  iat: Joi.number().integer(),
-});
-export const payloadSchema = Joi.alternatives(
+}).unknown();
+export const payloadSchema: AlternativesSchema<Payload> = Joi.alternatives(
   uploadPayloadSchema,
   downloadPayloadSchema
 );

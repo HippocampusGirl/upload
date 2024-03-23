@@ -1,6 +1,5 @@
 import { stat } from "node:fs/promises";
 
-import { delimiter } from "../config.js";
 import { FilePart, Job } from "../part.js";
 import { Range } from "../utils/range.js";
 import { WorkerPool } from "./worker.js";
@@ -50,16 +49,8 @@ export async function* generateUploadRequests(
   }
 }
 
-const makeSuffix = (uploadRequest: UploadRequest): string => {
-  const { size, range } = uploadRequest;
-  const digits = size.toString(10).length;
-
-  const [start, end] = [range.start, range.end].map((n) =>
-    n.toString(10).padStart(digits, "0")
-  );
-  return `${delimiter}${start}-${end}`;
-};
 export const makeKey = (uploadRequest: UploadRequest): string => {
-  const suffix = makeSuffix(uploadRequest);
+  const { range, size } = uploadRequest;
+  const suffix = range.toSuffix(size);
   return `${uploadRequest.path}${suffix}`;
 };

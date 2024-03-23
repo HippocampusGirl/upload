@@ -42,7 +42,7 @@ interface Options extends OptionsInit {
 
 const retryCount = 100;
 const timeout = 10 * 1000; // 10 seconds
-const requestTimeout = 60 * 60 * 1000; // 1 hour
+const requestTimeout = 10 * 60 * 1000; // 10 minutes
 export const requestOptions: Options = {
   retry: {
     limit: retryCount,

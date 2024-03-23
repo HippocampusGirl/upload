@@ -6,10 +6,10 @@ import { ChecksumJob, DownloadFile, DownloadJob } from "../download-schema.js";
 import { File } from "../entity/file.js";
 import { Part } from "../entity/part.js";
 import { StorageProvider } from "../entity/storage-provider.js";
+import { DownloadCompleteError } from "../errors.js";
 import { _Server, _ServerSocket } from "../socket.js";
 import { _BucketObject, Storage } from "../storage/base.js";
-import { DownloadCompleteError } from "../utils/errors.js";
-import { getRangeFromPathname } from "./download-parse.js";
+import { Range } from "../utils/range.js";
 
 const debug = Debug("server");
 
@@ -151,7 +151,7 @@ export class DownloadServer {
 
         let range;
         try {
-          range = getRangeFromPathname(object.Key);
+          range = Range.parse(object.Key);
         } catch (error) {
           debug(
             "deleting unknown file %o because the range could not be parsed: %O",

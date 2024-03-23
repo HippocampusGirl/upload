@@ -1,9 +1,9 @@
 import Debug from "debug";
 
 import { makeKey, UploadJob, UploadRequest } from "../client/upload-parts.js";
+import { UploadCreateError } from "../errors.js";
 import { parseRange } from "../part.js";
 import { _Server, _ServerSocket } from "../socket.js";
-import { UploadCreateError } from "../utils/errors.js";
 
 const debug = Debug("server");
 

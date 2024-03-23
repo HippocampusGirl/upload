@@ -21,6 +21,7 @@ coverage
 
 # API keys and secrets
 .env
+.dev.vars
 setup.sh
 
 # Dependency directory

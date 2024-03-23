@@ -1,7 +1,7 @@
 import Joi, { ObjectSchema } from "joi";
 
-import { expiresIn } from "../../config.js";
 import { client, requestOptions } from "../../utils/http-client.js";
+import { expiresIn } from "../ttl.js";
 import { AuthorizeAccountResponse } from "./authorize-account.js";
 
 import type { OptionsOfJSONResponseBody } from "got";

@@ -1,6 +1,5 @@
 import { Command, Option } from "commander";
 import Debug from "debug";
-import jwt from "jsonwebtoken";
 import cluster, { Worker } from "node:cluster";
 import { once } from "node:events";
 import { readFileSync } from "node:fs";
@@ -14,14 +13,15 @@ import msgpackParser from "socket.io-msgpack-parser";
 
 import { createAdapter, setupPrimary } from "@socket.io/cluster-adapter";
 import sticky from "@socket.io/sticky";
+import { decode, verify } from "@tsndr/cloudflare-worker-jwt";
 
 import { Controller } from "../controller.js";
-import { getDataSource } from "../data-source.js";
+import { getDataSource } from "../entity/data-source.js";
+import { UnauthorizedError } from "../errors.js";
 import { _Server } from "../socket.js";
 import { Storage } from "../storage/base.js";
-import { UnauthorizedError } from "../utils/errors.js";
 import { tsNodeArgv } from "../utils/loader.js";
-import { Payload, UploadPayload } from "../utils/payload.js";
+import { Payload, payloadSchema } from "../utils/payload.js";
 import { signal } from "../utils/signal.js";
 import { DownloadServer } from "./download-server.js";
 import { UploadServer } from "./upload-server.js";
@@ -101,7 +101,7 @@ export const makeServeCommand = () => {
   return command;
 };
 
-export const restartWorker = (worker: Worker) => {
+const restartWorker = (worker: Worker) => {
   debug(
     `exit process ${worker.process.pid} with exit code ${worker.process.exitCode}`
   );
@@ -212,22 +212,24 @@ class Server {
           new UnauthorizedError("Authorization token needs to be string")
         );
       }
-      let payload;
+
+      let payload: Payload;
       try {
-        payload = jwt.verify(token, this.publicKey, {});
+        const verified: boolean = await verify(token, this.publicKey);
+        if (verified !== true) {
+          return next(new UnauthorizedError("Invalid token"));
+        }
+        const decoded = decode<Payload, unknown>(token);
+        payload = await payloadSchema.validateAsync(decoded.payload);
       } catch (error) {
-        debug("token verify failed with error %O", error);
-        return next(new UnauthorizedError("Invalid token"));
-      }
-      if (payload === undefined || typeof payload !== "object") {
         return next(new UnauthorizedError("Invalid token payload"));
       }
 
       const { controller } = io;
 
-      const { t } = payload as Payload;
+      const { t } = payload;
       if (t === "u") {
-        const { n, s } = payload as UploadPayload;
+        const { n, s } = payload;
         const storageProvider = await controller.getStorageProvider(s);
         if (storageProvider === null) {
           return next(new UnauthorizedError("Invalid token storage provider"));

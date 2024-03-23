@@ -1,3 +1,5 @@
+import { parseTemplate } from "url-template";
+
 import { _Object, HeadBucketCommand } from "@aws-sdk/client-s3";
 
 import { StorageProvider } from "../entity/storage-provider.js";
@@ -37,7 +39,24 @@ export abstract class Storage {
 
   abstract createBucket(bucket: string): Promise<unknown>;
   abstract getUploadUrl(bucket: string, key: string): Promise<string>;
-  abstract getDownloadUrl(bucket: string, key: string): Promise<string>;
+
+  async getDownloadUrl(bucket: string, key: string): Promise<string> {
+    if (this.storageProvider.downloadUrlTemplate) {
+      const template = this.storageProvider.downloadUrlTemplate!;
+      const downloadUrl = parseTemplate(template).expand(
+        await this.getTemplateContext(bucket, key)
+      );
+      return Promise.resolve(downloadUrl);
+    }
+    return this.getAPIDownloadUrl(bucket, key);
+  }
+  getTemplateContext(
+    bucket: string,
+    key: string
+  ): Promise<Record<string, string>> {
+    return Promise.resolve({ bucket, key });
+  }
+  abstract getAPIDownloadUrl(bucket: string, key: string): Promise<string>;
   abstract deleteFile(bucket: string, key: string): Promise<unknown>;
 
   abstract listObjects(): AsyncGenerator<_BucketObject, void, undefined>;

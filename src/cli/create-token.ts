@@ -1,9 +1,10 @@
 import { Command } from "commander";
-import jwt from "jsonwebtoken";
-import { readFileSync } from "node:fs";
+import Joi from "joi";
+import { readFile } from "node:fs/promises";
+
+import { sign } from "@tsndr/cloudflare-worker-jwt";
 
 import { Payload, payloadSchema } from "../utils/payload.js";
-import { validate } from "../utils/validate.js";
 
 export const makeCreateTokenCommand = (): Command => {
   const command = new Command();
@@ -20,7 +21,7 @@ export const makeCreateTokenCommand = (): Command => {
       "--private-key-file <path>",
       "Path to the private key file generated with `openssl ecparam -name prime256v1 -genkey`"
     )
-    .action(() => {
+    .action(async () => {
       const options = command.opts();
 
       const type = options["type"];
@@ -45,17 +46,19 @@ export const makeCreateTokenCommand = (): Command => {
       if (typeof privateKeyFile !== "string") {
         throw new Error("privateKeyFile must be a string");
       }
-      const privateKey = readFileSync(privateKeyFile, "utf8");
+      const privateKey = await readFile(privateKeyFile, "utf8");
 
       const token = createToken(payload, privateKey);
-      process.stdout.write(token);
+      process.stdout.write(await token);
       process.stdout.write("\n");
     });
   return command;
 };
 
-const createToken = (payload: string | object, privateKey: string): string => {
-  payload = validate(payloadSchema, payload);
-  const token = jwt.sign(payload, privateKey, { algorithm: "ES256" });
+const createToken = (value: object, privateKey: string): Promise<string> => {
+  const payload = Joi.attempt(value, payloadSchema);
+  const token = sign<Payload>(payload, privateKey, {
+    algorithm: "ES256",
+  });
   return token;
 };

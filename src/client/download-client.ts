@@ -2,16 +2,17 @@ import { Command, Option } from "commander";
 import Debug from "debug";
 import fastq, { queueAsPromised } from "fastq";
 import Joi from "joi";
-import jwt from "jsonwebtoken";
 import { createHash } from "node:crypto";
 import { FileHandle, mkdir, open } from "node:fs/promises";
 import { dirname } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { join } from "path";
 
+import { decode } from "@tsndr/cloudflare-worker-jwt";
+
 import { Controller } from "../controller.js";
-import { getDataSource } from "../data-source.js";
 import { ChecksumJob, DownloadFile, DownloadJob } from "../download-schema.js";
+import { getDataSource } from "../entity/data-source.js";
 import { parseRange } from "../part.js";
 import { _ClientSocket } from "../socket.js";
 import { touch } from "../utils/fs.js";
@@ -20,7 +21,6 @@ import { downloadPayloadSchema } from "../utils/payload.js";
 import { Progress } from "../utils/progress.js";
 import { Range } from "../utils/range.js";
 import { signal } from "../utils/signal.js";
-import { validate } from "../utils/validate.js";
 import { endpointSchema, makeClient } from "./socket-client.js";
 import { WorkerPool } from "./worker.js";
 
@@ -69,11 +69,11 @@ export const makeDownloadClientCommand = () => {
       if (typeof token !== "string") {
         throw new Error(`"token" needs to be a string`);
       }
-      const payload = jwt.decode(token);
-      if (typeof payload !== "object" || payload === null) {
+      const decoded = decode(token);
+      if (typeof decoded !== "object" || decoded === null) {
         throw new Error(`"token" does not have a payload`);
       }
-      validate(downloadPayloadSchema, payload);
+      Joi.attempt(decoded.payload, downloadPayloadSchema);
 
       const basePath: string | null = options["basePath"] || null;
 

@@ -1,6 +1,6 @@
 import { Command, Option } from "commander";
 
-import { getDataSource } from "../data-source.js";
+import { getDataSource } from "../entity/data-source.js";
 import { StorageProvider } from "../entity/storage-provider.js";
 
 export const makeAddStorageProviderCommand = (): Command => {
@@ -34,10 +34,7 @@ export const makeAddStorageProviderCommand = (): Command => {
       "--bucket-location-constraint <string>",
       "The location constraint to use when creating new buckets"
     )
-    .option(
-      "--backblaze-download-url <string>",
-      "Use this download url instead"
-    )
+    .option("--download-url-template <string>", "Use this download url instead")
     .showHelpAfterError()
     .action(async () => {
       const options = command.opts();
@@ -53,7 +50,7 @@ export const makeAddStorageProviderCommand = (): Command => {
         secretAccessKey: options["secretAccessKey"],
         endpoint: options["endpoint"],
         bucketLocationConstraint: options["bucketLocationConstraint"],
-        backblazeDownloadUrl: options["backblazeDownloadUrl"],
+        downloadUrlTemplate: options["downloadUrlTemplate"],
       });
       await dataSource.manager.save(storageProvider);
     });

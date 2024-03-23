@@ -23,7 +23,7 @@ const listBucketsResponseSchema: ObjectSchema<ListBucketsResponse> = Joi.object(
     buckets: Joi.array().items(bucketSchema).required(),
   }
 ).unknown();
-export const listBucket = async (
+const listBucket = async (
   authorizeAccountResponse: AuthorizeAccountResponse,
   bucketName: string
 ): Promise<ListBucketsResponse> => {

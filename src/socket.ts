@@ -3,7 +3,7 @@ import { Socket as ClientSocket } from "socket.io-client";
 
 import { UploadJob, UploadRequest } from "./client/upload-parts.js";
 import { ChecksumJob, DownloadFile, DownloadJob } from "./download-schema.js";
-import { DownloadCompleteError, UploadCreateError } from "./utils/errors.js";
+import { DownloadCompleteError, UploadCreateError } from "./errors.js";
 
 interface ClientToServerEvents {
   "download:complete": (

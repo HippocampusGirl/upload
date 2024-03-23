@@ -4,7 +4,6 @@ import Debug from "debug";
 import fastq, { queueAsPromised } from "fastq";
 import { Request } from "got";
 import Joi from "joi";
-import jwt from "jsonwebtoken";
 import { FileHandle, open } from "node:fs/promises";
 import { availableParallelism } from "node:os";
 import { relative } from "node:path";
@@ -12,14 +11,15 @@ import { PassThrough } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { inspect } from "node:util";
 
+import { decode } from "@tsndr/cloudflare-worker-jwt";
+
+import { UploadCreateError } from "../errors.js";
 import { parseRange } from "../part.js";
 import { _ClientSocket } from "../socket.js";
-import { UploadCreateError } from "../utils/errors.js";
 import { client, requestOptions } from "../utils/http-client.js";
 import { uploadPayloadSchema } from "../utils/payload.js";
 import { Progress } from "../utils/progress.js";
 import { signal } from "../utils/signal.js";
-import { validate } from "../utils/validate.js";
 import { endpointSchema, makeClient } from "./socket-client.js";
 import { generateUploadRequests, RangeOptions, UploadJob, UploadRequest } from "./upload-parts.js";
 import { WorkerPool } from "./worker.js";
@@ -69,11 +69,11 @@ export const makeUploadClientCommand = () => {
       if (typeof token !== "string") {
         throw new Error(`"token" needs to be a string`);
       }
-      const payload = jwt.decode(token);
-      if (typeof payload !== "object" || payload === null) {
+      const decoded = decode(token);
+      if (typeof decoded !== "object" || decoded === null) {
         throw new Error(`"token" does not have a payload`);
       }
-      validate(uploadPayloadSchema, payload);
+      Joi.attempt(decoded.payload, uploadPayloadSchema);
 
       const paths = options["path"];
       if (!Array.isArray(paths)) {

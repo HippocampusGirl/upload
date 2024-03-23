@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { DataSource } from "typeorm";
 
 import { Controller } from "../controller.js";
-import { getDataSource } from "../data-source.js";
+import { getDataSource } from "../entity/data-source.js";
 import { Range } from "../utils/range.js";
 
 describe("controller", () => {

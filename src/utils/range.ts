@@ -1,3 +1,4 @@
+const delimiter = ".";
 export class Range {
   start: number; // inclusive
   end: number; // inclusive
@@ -20,6 +21,33 @@ export class Range {
 
   toString(): string {
     return `${this.start}-${this.end}`;
+  }
+
+  toSuffix(size: number): string {
+    const digits = size.toString(10).length;
+
+    const [start, end] = [this.start, this.end].map((n) =>
+      n.toString(10).padStart(digits, "0")
+    );
+    return `${delimiter}${start}-${end}`;
+  }
+
+  static parse(path: string): Range {
+    const tokens = path.split(delimiter);
+    const suffix = tokens.pop();
+    if (suffix === undefined) {
+      throw new Error(`Invalid path: ${path}`);
+    }
+    const [start, end]: (number | undefined)[] = suffix
+      .split("-")
+      .map((n) => parseInt(n, 10));
+    if (start === undefined || Number.isNaN(start) || start < 0) {
+      throw new Error(`Invalid start: ${path}`);
+    }
+    if (end === undefined || Number.isNaN(end) || end < start || end < 0) {
+      throw new Error(`Invalid end: ${path}`);
+    }
+    return new Range(start, end);
   }
 }
 
