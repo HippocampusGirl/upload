@@ -224,7 +224,7 @@ class Server {
         decoded.header === undefined ||
         decoded.header.alg === undefined
       ) {
-        return next(new UnauthorizedError("Invalid token"));
+        return next(new UnauthorizedError("Could not decode token"));
       }
 
       let verified: boolean = false;
@@ -237,6 +237,12 @@ class Server {
         debug("error verifying token: %O", error);
       }
       if (verified !== true) {
+        debug(
+          "received invalid token %o with algorithm %o for public key %O",
+          token,
+          decoded.header.alg,
+          this.publicKey
+        );
         return next(new UnauthorizedError("Invalid token"));
       }
 
