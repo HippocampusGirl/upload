@@ -7,6 +7,7 @@ import { File } from "../entity/file.js";
 import { Part } from "../entity/part.js";
 import { StorageProvider } from "../entity/storage-provider.js";
 import { DownloadCompleteError } from "../errors.js";
+import { parseRange } from "../part.js";
 import { _Server, _ServerSocket } from "../socket.js";
 import { BucketObject, Storage } from "../storage/base.js";
 import { Range } from "../utils/range.js";
@@ -37,6 +38,8 @@ export class DownloadServer {
         downloadJob: DownloadJob,
         callback: (u: DownloadCompleteError | undefined) => void
       ) => {
+        parseRange(downloadJob);
+
         const storageProvider = await controller.getStorageProvider(
           downloadJob.storageProviderId
         );
