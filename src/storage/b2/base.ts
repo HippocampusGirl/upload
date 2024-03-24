@@ -48,15 +48,6 @@ export class B2Storage extends S3Storage {
       ""
     );
   }
-  override async getTemplateContext(
-    bucket: string,
-    key: string
-  ): Promise<Record<string, string>> {
-    const authorizeAccountResponse = await this.authorizeAccountResponse;
-    const { downloadUrl } = authorizeAccountResponse.apiInfo.storageApi;
-    const { hostname } = new URL(downloadUrl);
-    return { ...super.getTemplateContext(bucket, key), hostname };
-  }
   override async getAPIDownloadUrl(
     bucket: string,
     key: string

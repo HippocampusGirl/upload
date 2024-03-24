@@ -1,5 +1,3 @@
-import { parseTemplate } from "url-template";
-
 import { _Object, HeadBucketCommand, S3Client } from "@aws-sdk/client-s3";
 
 import { getBucketName } from "./bucket-name.js";
@@ -51,20 +49,11 @@ export abstract class Storage {
   abstract getUploadUrl(bucket: string, key: string): Promise<string>;
 
   async getDownloadUrl(bucket: string, key: string): Promise<string> {
-    if (this.storageProvider.downloadUrlTemplate) {
-      const template = this.storageProvider.downloadUrlTemplate!;
-      const downloadUrl = parseTemplate(template).expand(
-        await this.getTemplateContext(bucket, key)
-      );
-      return downloadUrl;
+    const template = this.storageProvider.downloadUrlTemplate;
+    if (template !== null) {
+      return template.replaceAll("{bucket}", bucket).replaceAll("{key}", key);
     }
     return this.getAPIDownloadUrl(bucket, key);
-  }
-  getTemplateContext(
-    bucket: string,
-    key: string
-  ): Promise<Record<string, string>> {
-    return Promise.resolve({ bucket, key });
   }
   abstract getAPIDownloadUrl(bucket: string, key: string): Promise<string>;
   abstract deleteFile(bucket: string, key: string): Promise<unknown>;
