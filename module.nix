@@ -61,7 +61,7 @@ in
         ++ (lib.optional (cfg.database.type == "postgres")
         "postgresql.service");
       serviceConfig = {
-        ExecStart = lib.concatStringsSep "" [
+        ExecStart = lib.concatStringsSep " " [
           "${upload}/bin/upload serve"
           "${lib.optionalString cfg.debug " --debug"}"
           "--port \"${toString cfg.port}\""
