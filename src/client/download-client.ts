@@ -82,14 +82,14 @@ export const makeDownloadClientCommand = () => {
         throw new Error(`"numThreads" needs to be a number`);
       }
 
-      const socket = makeClient(endpoint, token);
       const dataSource = await getDataSource(
         options["databaseType"],
         options["connectionString"]
       );
       const controller = new Controller(dataSource);
       downloadClient = new DownloadClient(
-        socket,
+        endpoint,
+        token,
         basePath,
         numThreads,
         controller
@@ -101,6 +101,9 @@ export const makeDownloadClientCommand = () => {
 };
 
 class DownloadClient {
+  endpoint: string;
+  token: string;
+
   socket: _ClientSocket;
   queue: queueAsPromised<DownloadJob, void>;
   progress: Progress = new Progress();
@@ -115,12 +118,15 @@ class DownloadClient {
   workerPool: WorkerPool;
 
   constructor(
-    socket: _ClientSocket,
+    endpoint: string,
+    token: string,
     basePath: string | null,
     numThreads: number,
     controller: Controller
   ) {
-    this.socket = socket;
+    this.endpoint = endpoint;
+    this.token = token;
+    this.socket = makeClient(endpoint, token);
     this.basePath = basePath;
     this.queue = fastq.promise(this, this.runDownloadJob, numThreads);
     this.controller = controller;
@@ -347,9 +353,16 @@ class DownloadClient {
 
       const { url } = downloadJob;
 
+      const options = { ...requestOptions };
+      if (url.startsWith(this.endpoint)) {
+        options.headers = {
+          Authorization: this.token,
+        };
+      }
+
       let readStream: Request;
       try {
-        readStream = client.stream.get(url, { ...requestOptions });
+        readStream = client.stream.get(url, options);
       } catch (error) {
         debug(error);
         return;

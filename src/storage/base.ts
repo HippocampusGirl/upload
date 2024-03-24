@@ -56,7 +56,7 @@ export abstract class Storage {
       const downloadUrl = parseTemplate(template).expand(
         await this.getTemplateContext(bucket, key)
       );
-      return Promise.resolve(downloadUrl);
+      return downloadUrl;
     }
     return this.getAPIDownloadUrl(bucket, key);
   }
