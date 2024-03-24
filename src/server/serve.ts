@@ -13,7 +13,7 @@ import msgpackParser from "socket.io-msgpack-parser";
 
 import { createAdapter, setupPrimary } from "@socket.io/cluster-adapter";
 import sticky from "@socket.io/sticky";
-import { decode, verify } from "@tsndr/cloudflare-worker-jwt";
+import { decode, JwtData, verify } from "@tsndr/cloudflare-worker-jwt";
 
 import { Controller } from "../controller.js";
 import { getDataSource } from "../entity/data-source.js";
@@ -213,13 +213,35 @@ class Server {
         );
       }
 
+      let decoded: JwtData | null = null;
+      try {
+        decoded = decode(token);
+      } catch (error) {
+        debug("error decoding token: %O", error);
+      }
+      if (
+        decoded === null ||
+        decoded.header === undefined ||
+        decoded.header.alg === undefined
+      ) {
+        return next(new UnauthorizedError("Invalid token"));
+      }
+
+      let verified: boolean = false;
+      try {
+        verified = await verify(token, this.publicKey, {
+          algorithm: decoded.header.alg,
+          throwError: true,
+        });
+      } catch (error) {
+        debug("error verifying token: %O", error);
+      }
+      if (verified !== true) {
+        return next(new UnauthorizedError("Invalid token"));
+      }
+
       let payload: Payload;
       try {
-        const verified: boolean = await verify(token, this.publicKey);
-        if (verified !== true) {
-          return next(new UnauthorizedError("Invalid token"));
-        }
-        const decoded = decode<Payload, unknown>(token);
         payload = await payloadSchema.validateAsync(decoded.payload);
       } catch (error) {
         return next(new UnauthorizedError("Invalid token payload"));

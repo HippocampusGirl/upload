@@ -8,7 +8,7 @@ import { Part } from "../entity/part.js";
 import { StorageProvider } from "../entity/storage-provider.js";
 import { DownloadCompleteError } from "../errors.js";
 import { _Server, _ServerSocket } from "../socket.js";
-import { _BucketObject, Storage } from "../storage/base.js";
+import { BucketObject, Storage } from "../storage/base.js";
 import { Range } from "../utils/range.js";
 
 const debug = Debug("server");
@@ -100,7 +100,7 @@ export class DownloadServer {
 
   async createDownloadJob(
     storage: Storage,
-    object: _BucketObject,
+    object: BucketObject,
     part: Part
   ): Promise<DownloadJob> {
     if (object.Key === undefined) {

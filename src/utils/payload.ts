@@ -5,7 +5,7 @@ export interface UploadPayload {
   n: string;
   s: string;
 }
-interface DownloadPayload {
+export interface DownloadPayload {
   t: "d";
 }
 export type Payload = UploadPayload | DownloadPayload;

@@ -60,17 +60,16 @@ in
       after = [ "network.target" ]
         ++ (lib.optional (cfg.database.type == "postgres")
         "postgresql.service");
-      script = ''
-        export ENDPOINT="$(cat ${cfg.s3.endpointFile})"
-        export ACCESS_KEY_ID="$(cat ${cfg.s3.accessKeyIdFile})"
-        export SECRET_ACCESS_KEY="$(cat ${cfg.s3.secretAccessKeyFile})"
-        ${upload}/bin/upload serve ${lib.optionalString cfg.debug " --debug"} \
-          --port "${toString cfg.port}" \
-          --public-key-file "${cfg.publicKeyFile}" \
-          --database-type "${cfg.database.type}" \
-          --connection-string "${cfg.database.connection-string}"
-      '';
       serviceConfig = {
+        ExecStart = lib.concatStringsSep "" [
+          "${upload}/bin/upload serve"
+          "${lib.optionalString cfg.debug " --debug"}"
+          "--port \"${toString cfg.port}\""
+          "--public-key-file \"${cfg.publicKeyFile}\""
+          "--database-type \"${cfg.database.type}\""
+          "--connection-string \"${cfg.database.connection-string}\""
+        ];
+
         Restart = "on-failure";
 
         # Hardening based on https://github.com/fort-nix/nix-bitcoin/blob/master/pkgs/lib.nix

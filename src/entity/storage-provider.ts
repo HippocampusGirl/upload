@@ -1,13 +1,13 @@
 import { Column, Entity, PrimaryColumn } from "typeorm";
 
-import { S3Client, S3ClientConfig } from "@aws-sdk/client-s3";
+import { S3Client } from "@aws-sdk/client-s3";
 
 import { B2Storage } from "../storage/b2/base.js";
-import { Storage } from "../storage/base.js";
+import { _StorageProvider, Storage } from "../storage/base.js";
 import { S3Storage } from "../storage/s3.js";
 
 @Entity()
-export class StorageProvider {
+export class StorageProvider implements _StorageProvider {
   @PrimaryColumn("varchar")
   id: string;
 
@@ -43,21 +43,15 @@ export class StorageProvider {
     this.downloadUrlTemplate = downloadUrlTemplate || null;
   }
 
-  get s3Configuration(): S3ClientConfig {
-    return {
+  get s3(): S3Client {
+    return new S3Client({
+      forcePathStyle: true,
       endpoint: this.endpoint,
       region: this.region,
       credentials: {
         accessKeyId: this.accessKeyId,
         secretAccessKey: this.secretAccessKey,
       },
-    };
-  }
-
-  get s3(): S3Client {
-    return new S3Client({
-      forcePathStyle: true,
-      ...this.s3Configuration,
     });
   }
 

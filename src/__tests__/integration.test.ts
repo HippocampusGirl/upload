@@ -66,7 +66,7 @@ describe("application", () => {
 
     privateKeyFile = join(temporaryDirectory, "private.pem");
     await runShellCommand(
-      `openssl ecparam -genkey -name prime256v1 -noout -out ${privateKeyFile}`
+      `openssl pkcs8 -topk8 -nocrypt -in <(openssl ecparam -genkey -name prime256v1) -out ${privateKeyFile}`
     );
     publicKeyFile = join(temporaryDirectory, "public.pem");
     await runShellCommand(
@@ -88,6 +88,52 @@ describe("application", () => {
       await container.stop();
     }
     await rm(temporaryDirectory, { recursive: true, force: true });
+  });
+
+  it("can create upload token", async () => {
+    const spy = jest.spyOn(process.stdout, "write");
+    await runCommand([
+      "create-token",
+      "--name",
+      tokenName,
+      "--type",
+      "upload",
+      "--storage-id",
+      storageProviderId,
+      "--private-key-file",
+      privateKeyFile,
+    ]);
+    uploadToken = spy.mock.calls[0]![0] as string;
+    spy.mockRestore();
+
+    expect(verify(uploadToken, publicKey)).toBeTruthy();
+    const decoded = decode(uploadToken);
+    expect(decoded.payload).toMatchObject({
+      n: tokenName,
+      t: "u",
+      s: storageProviderId,
+    });
+  });
+
+  it("can create download token", async () => {
+    const spy = jest.spyOn(process.stdout, "write");
+    await runCommand([
+      "create-token",
+      "--type",
+      "download",
+      "--storage-id",
+      storageProviderId,
+      "--private-key-file",
+      privateKeyFile,
+    ]);
+    downloadToken = spy.mock.calls[0]![0] as string;
+    spy.mockRestore();
+
+    expect(verify(downloadToken, publicKey)).toBeTruthy();
+    const decoded = decode(downloadToken);
+    expect(decoded.payload).toMatchObject({
+      t: "d",
+    });
   });
 
   it("can synchronize", async () => {
@@ -130,52 +176,6 @@ describe("application", () => {
       "--secretAccessKey",
       "does-not-matter",
     ]);
-  });
-
-  it("can create upload token", async () => {
-    const spy = jest.spyOn(process.stdout, "write");
-    await runCommand([
-      "create-token",
-      "--name",
-      tokenName,
-      "--type",
-      "upload",
-      "--storage-id",
-      storageProviderId,
-      "--private-key-file",
-      privateKeyFile,
-    ]);
-    uploadToken = spy.mock.calls[0]![0] as string;
-    spy.mockRestore();
-
-    expect(verify(downloadToken, publicKey)).toBeTruthy();
-    const payload = decode(downloadToken);
-    expect(payload).toMatchObject({
-      n: tokenName,
-      t: "u",
-      s: storageProviderId,
-    });
-  });
-
-  it("can create download token", async () => {
-    const spy = jest.spyOn(process.stdout, "write");
-    await runCommand([
-      "create-token",
-      "--type",
-      "download",
-      "--storage-id",
-      storageProviderId,
-      "--private-key-file",
-      privateKeyFile,
-    ]);
-    downloadToken = spy.mock.calls[0]![0] as string;
-    spy.mockRestore();
-
-    expect(verify(downloadToken, publicKey)).toBeTruthy();
-    const payload = decode(downloadToken);
-    expect(payload).toMatchObject({
-      t: "d",
-    });
   });
 
   it(
@@ -256,6 +256,6 @@ describe("application", () => {
       );
       expect(uploadFileChecksumSHA256).toBe(downloadFileChecksumSHA256);
     },
-    2 * 60 * 1000
+    1 * 60 * 1000
   );
 });

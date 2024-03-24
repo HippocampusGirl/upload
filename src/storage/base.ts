@@ -1,18 +1,28 @@
 import { parseTemplate } from "url-template";
 
-import { _Object, HeadBucketCommand } from "@aws-sdk/client-s3";
+import { _Object, HeadBucketCommand, S3Client } from "@aws-sdk/client-s3";
 
-import { StorageProvider } from "../entity/storage-provider.js";
 import { getBucketName } from "./bucket-name.js";
 
-export interface _BucketObject extends _Object {
+export interface BucketObject extends _Object {
   Bucket: string;
 }
+export interface _StorageProvider {
+  id: string;
+  endpoint: string;
+  region: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  bucketLocationConstraint: string | null;
+  downloadUrlTemplate: string | null;
 
+  s3: S3Client;
+  isBackblaze: boolean;
+}
 export abstract class Storage {
-  storageProvider: StorageProvider;
+  storageProvider: _StorageProvider;
 
-  constructor(storageProvider: StorageProvider) {
+  constructor(storageProvider: _StorageProvider) {
     this.storageProvider = storageProvider;
   }
 
@@ -27,7 +37,7 @@ export abstract class Storage {
   async requireBucketName(n: string): Promise<string> {
     const { s3 } = this.storageProvider;
     const { accessKeyId } = await s3.config.credentials();
-    const bucket = getBucketName(n, accessKeyId);
+    const bucket = await getBucketName(n, accessKeyId);
     const input = { Bucket: bucket };
     try {
       await s3.send(new HeadBucketCommand(input));
@@ -59,5 +69,5 @@ export abstract class Storage {
   abstract getAPIDownloadUrl(bucket: string, key: string): Promise<string>;
   abstract deleteFile(bucket: string, key: string): Promise<unknown>;
 
-  abstract listObjects(): AsyncGenerator<_BucketObject, void, undefined>;
+  abstract listObjects(): AsyncGenerator<BucketObject, void, undefined>;
 }

@@ -27,6 +27,10 @@
             nodePackages.typescript
             nodePackages.typescript-language-server
           ];
+          # See https://github.com/scottwillmoore/cloudflare-workers-with-nix
+          shellHook = ''
+            export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+          '';
         };
         packages = {
           default = upload;

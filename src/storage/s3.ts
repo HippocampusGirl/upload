@@ -7,7 +7,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-import { _BucketObject, Storage } from "./base.js";
+import { BucketObject, Storage } from "./base.js";
 import { prefix } from "./bucket-name.js";
 import { signedUrlOptions } from "./ttl.js";
 
@@ -83,7 +83,7 @@ export class S3Storage extends Storage {
       }
     } while (isTruncated);
   }
-  async *listObjects(): AsyncGenerator<_BucketObject, void, undefined> {
+  async *listObjects(): AsyncGenerator<BucketObject, void, undefined> {
     const { s3 } = this.storageProvider;
 
     const result = await s3.send(new ListBucketsCommand({}));
