@@ -64,9 +64,13 @@ describe("application", () => {
     serverConnectionString = join(temporaryDirectory, "server.sqlite");
     downloadConnectionString = join(temporaryDirectory, "download.sqlite");
 
+    const privateKeyEcFile = join(temporaryDirectory, "private.key");
+    await runShellCommand(
+      `openssl ecparam -genkey -name prime256v1 -out ${privateKeyEcFile}`
+    );
     privateKeyFile = join(temporaryDirectory, "private.pem");
     await runShellCommand(
-      `openssl pkcs8 -topk8 -nocrypt -in <(openssl ecparam -genkey -name prime256v1) -out ${privateKeyFile}`
+      `openssl pkcs8 -topk8 -nocrypt -in ${privateKeyEcFile} -out ${privateKeyFile}`
     );
     publicKeyFile = join(temporaryDirectory, "public.pem");
     await runShellCommand(
