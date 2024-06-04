@@ -1,7 +1,7 @@
 {
   description = "A basic flake with a shell";
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    nixpkgs.url = "github:nixos/nixpkgs/release-24.05";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
@@ -21,7 +21,7 @@
           buildInputs = with pkgs; [
             awscli
             bun
-            nodejs_21
+            nodejs_22
             nixpkgs-fmt
             nodePackages.pnpm
             nodePackages.typescript
