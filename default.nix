@@ -4,7 +4,7 @@ pkgs.buildNpmPackage {
   src = pkgs.nix-gitignore.gitignoreSource [ ] ./.;
 
   nativeBuildInputs = with pkgs; [ python3 ];
-  nodejs = pkgs.nodejs_22;
+  nodejs = pkgs.nodejs_20;
 
   npmDepsHash = "sha256-N7BZfQNGzD9a8VLoQx+/ywcHRB4glbKCKcJTjvLPC/4=";
 

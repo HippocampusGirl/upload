@@ -21,7 +21,7 @@
           buildInputs = with pkgs; [
             awscli
             bun
-            nodejs_22
+            nodejs_20
             nixpkgs-fmt
             nodePackages.pnpm
             nodePackages.typescript
