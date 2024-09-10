@@ -19,7 +19,7 @@ export class File {
   @Column({ type: "boolean", default: false })
   verified: boolean;
 
-  @OneToMany(() => Part, (part) => part.file)
+  @OneToMany(() => Part, (part: Part) => part.file)
   parts: Part[];
 
   /**

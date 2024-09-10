@@ -3,7 +3,7 @@ import Joi, { ObjectSchema } from "joi";
 import { client, requestOptions } from "../../utils/http-client.js";
 import { AuthorizeAccountResponse } from "./authorize-account.js";
 
-import type { OptionsOfUnknownResponseBody } from "got";
+import type { OptionsOfUnknownResponseBodyWrapped } from "got";
 export interface FileVersion {
   fileName: string;
   fileId: string;
@@ -36,7 +36,7 @@ export const headFileByName = async (
   const { apiInfo, authorizationToken } = authorizeAccountResponse;
   const apiUrl = apiInfo.storageApi.apiUrl;
   const url = new URL(`/file/${bucketName}/${fileName}`, apiUrl);
-  const options: OptionsOfUnknownResponseBody = {
+  const options: OptionsOfUnknownResponseBodyWrapped = {
     ...requestOptions,
     url,
     headers: {

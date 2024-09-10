@@ -4,7 +4,7 @@ import { client, requestOptions } from "../../utils/http-client.js";
 import { expiresIn } from "../ttl.js";
 import { AuthorizeAccountResponse } from "./authorize-account.js";
 
-import type { OptionsOfJSONResponseBody } from "got";
+import type { OptionsOfJSONResponseBodyWrapped } from "got";
 interface GetDownloadAuthorizationRequest {
   bucketId: string;
   fileNamePrefix: string;
@@ -30,7 +30,7 @@ export const getDownloadAuthorizationToken = async (
     fileNamePrefix,
     validDurationInSeconds: expiresIn,
   };
-  const options: OptionsOfJSONResponseBody = {
+  const options: OptionsOfJSONResponseBodyWrapped = {
     ...requestOptions,
     url,
     json,

@@ -1,7 +1,7 @@
 {
   description = "A basic flake with a shell";
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/release-24.05";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
@@ -21,11 +21,12 @@
           buildInputs = with pkgs; [
             awscli
             bun
-            nodejs_20
+            nodejs_22
             nixpkgs-fmt
             nodePackages.pnpm
             nodePackages.typescript
             nodePackages.typescript-language-server
+            pre-commit
           ];
           # See https://github.com/scottwillmoore/cloudflare-workers-with-nix
           shellHook = ''

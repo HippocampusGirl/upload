@@ -9,6 +9,7 @@
   "typescript.format.enable": true,
   "typescript.preferences.quoteStyle": "double",
   "typescript.preferences.importModuleSpecifier": "relative",
+  "typescript.tsserver.experimental.enableProjectDiagnostics": true,
   "[typescript]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode",
     "editor.formatOnSave": true,

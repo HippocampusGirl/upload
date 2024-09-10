@@ -2,7 +2,7 @@ import Joi, { ObjectSchema } from "joi";
 
 import { client, requestOptions } from "../../utils/http-client.js";
 
-import type { OptionsOfJSONResponseBody } from "got";
+import type { OptionsOfJSONResponseBodyWrapped } from "got";
 
 interface StorageApi {
   apiUrl: string;
@@ -36,7 +36,7 @@ export const authorizeAccount = async (
   ApplicationKey: string
 ): Promise<AuthorizeAccountResponse> => {
   const url = new URL("b2api/v3/b2_authorize_account", apiUrl);
-  const options: OptionsOfJSONResponseBody = {
+  const options: OptionsOfJSONResponseBodyWrapped = {
     ...requestOptions,
     url,
     headers: {

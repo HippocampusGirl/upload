@@ -4,7 +4,7 @@ import { client, requestOptions } from "../../utils/http-client.js";
 import { AuthorizeAccountResponse } from "./authorize-account.js";
 import { FileVersion } from "./head-file-by-name.js";
 
-import type { OptionsOfJSONResponseBody } from "got";
+import type { OptionsOfJSONResponseBodyWrapped } from "got";
 interface DeleteFileVersionRequest extends FileVersion {
   bypassGovernance: false;
 }
@@ -27,7 +27,7 @@ export const deleteFileVersion = async (
     fileId,
     bypassGovernance: false,
   };
-  const options: OptionsOfJSONResponseBody = {
+  const options: OptionsOfJSONResponseBodyWrapped = {
     ...requestOptions,
     url,
     json,

@@ -190,7 +190,7 @@ export class UploadClient {
         async function* (source: AsyncIterable<Buffer>) {
           for await (const chunk of source) {
             // debug("read chunk of %o of size %o", path, chunk.length);
-            progress.gauge.pulse();
+            progress.pulse();
             yield chunk;
           }
         },

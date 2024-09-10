@@ -1,20 +1,20 @@
 import { format } from "bytes";
 import formatDuration from "format-duration";
-import Gauge from "gauge";
 
 import { _Part } from "../part.js";
 
+const activityIndicators = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
+
 export class Progress {
-  public readonly gauge: Gauge = new Gauge();
   private bytes = 0;
   private total = 0;
   private start: number | undefined = undefined;
 
+  private activityIndicatorIndex = 0;
+
   constructor() {}
 
-  terminate() {
-    this.gauge.disable();
-  }
+  terminate() {}
 
   addPart(part: _Part): void {
     this.total += part.range.size();
@@ -35,8 +35,14 @@ export class Progress {
     this.update();
   }
 
+  pulse(): void {
+    this.activityIndicatorIndex =
+      (this.activityIndicatorIndex + 1) % activityIndicators.length;
+    this.update();
+  }
+
   update(): void {
-    const { bytes, gauge, start, total } = this;
+    const { bytes, start, total } = this;
     // if (uploadJob !== undefined) {
     //   bytes += uploadJob.range.size();
     // }
@@ -57,9 +63,17 @@ export class Progress {
     const percentCompleteString = `${Math.round(proportionComplete * 100)}%`;
     const sizeString = `${format(bytes)} / ${format(total)}`;
     // const rateString = `${format(eta.rate())}/s`;
-    gauge.show(
-      `${percentCompleteString} ${sizeString} ${timeString}`,
-      proportionComplete
+
+    if (process.stdout.isTTY) {
+      process.stderr.cursorTo(0);
+      process.stderr.clearLine(1);
+    } else {
+      process.stderr.write("\r");
+    }
+
+    const message = `${percentCompleteString} ${sizeString} ${timeString}`;
+    process.stderr.write(
+      `${activityIndicators[this.activityIndicatorIndex]} ${message}`
     );
   }
 }

@@ -224,7 +224,7 @@ class DownloadClient {
             md5.update(chunk);
             size += chunk.length;
 
-            progress.gauge.pulse();
+            progress.pulse();
 
             yield chunk;
           }

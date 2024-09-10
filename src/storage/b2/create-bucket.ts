@@ -1,9 +1,9 @@
+import { OptionsOfJSONResponseBodyWrapped } from "got";
 import Joi, { ObjectSchema } from "joi";
 
 import { client, requestOptions } from "../../utils/http-client.js";
 import { AuthorizeAccountResponse } from "./authorize-account.js";
 
-import type { OptionsOfJSONResponseBody } from "got";
 interface LifecycleRule {
   daysFromHidingToDeleting: number;
   daysFromUploadingToHiding: number | null;
@@ -64,7 +64,7 @@ export const createBucket = async (
     replicationConfiguration: {},
     defaultServerSideEncryption,
   };
-  const options: OptionsOfJSONResponseBody = {
+  const options: OptionsOfJSONResponseBodyWrapped = {
     ...requestOptions,
     url,
     json,

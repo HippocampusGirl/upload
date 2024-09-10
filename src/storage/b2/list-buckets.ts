@@ -3,7 +3,7 @@ import Joi, { ObjectSchema } from "joi";
 import { client, requestOptions } from "../../utils/http-client.js";
 import { AuthorizeAccountResponse } from "./authorize-account.js";
 
-import type { OptionsOfJSONResponseBody } from "got";
+import type { OptionsOfJSONResponseBodyWrapped } from "got";
 interface ListBucketsRequest {
   accountId: string;
   bucketName: string;
@@ -31,7 +31,7 @@ const listBucket = async (
   const apiUrl = apiInfo.storageApi.apiUrl;
   const url = new URL("b2api/v3/b2_list_buckets", apiUrl);
   const json: ListBucketsRequest = { accountId, bucketName };
-  const options: OptionsOfJSONResponseBody = {
+  const options: OptionsOfJSONResponseBodyWrapped = {
     ...requestOptions,
     url,
     json,
