@@ -6,7 +6,7 @@ pkgs.buildNpmPackage {
   nativeBuildInputs = with pkgs; [ python3 ];
   nodejs = pkgs.nodejs_20;
 
-  npmDepsHash = "sha256-FKlP9CsfcOgvAsQCu0qSceJnhsswWQPWYTO3yQ8Osns=";
+  npmDepsHash = "sha256-TG9cxFRE6hPshzt2foNUEEw+hQ9uT/Wrnhn1PSyG04w=";
 
   doCheck = true;
   checkPhase = ''
