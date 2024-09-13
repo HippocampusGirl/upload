@@ -38,7 +38,7 @@ export class UploadServer {
       try {
         success = await controller.addFilePart(n, uploadRequest);
       } catch (error) {
-        debug(error);
+        debug("unknown error adding file part: %O", error);
         return { error: "unknown" };
       }
       if (!success) {

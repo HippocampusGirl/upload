@@ -26,6 +26,8 @@ jobs:
 
       - run: npm ci
       - run: npm test
+        env:
+          CI: true
       - run: npm run build
 
       - run: nix build .#default

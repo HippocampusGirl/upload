@@ -6,7 +6,7 @@ import { B2Storage } from "../storage/b2/base.js";
 import { _StorageProvider, Storage } from "../storage/base.js";
 import { S3Storage } from "../storage/s3.js";
 
-@Entity()
+@Entity("storage_providers")
 export class StorageProvider implements _StorageProvider {
   @PrimaryColumn("varchar")
   id: string;
@@ -15,14 +15,14 @@ export class StorageProvider implements _StorageProvider {
   endpoint: string;
   @Column("varchar")
   region: string;
-  @Column("varchar")
+  @Column({ name: "access_key_id", type: "varchar" })
   accessKeyId: string;
-  @Column("varchar")
+  @Column({ type: "varchar" })
   secretAccessKey: string;
 
-  @Column("varchar", { nullable: true, default: null })
+  @Column({ type: "varchar", nullable: true, default: null })
   bucketLocationConstraint: string | null;
-  @Column("varchar", { nullable: true, default: null })
+  @Column({ type: "varchar", nullable: true, default: null })
   downloadUrlTemplate: string | null;
 
   constructor({

@@ -16,7 +16,10 @@ export class Range {
     return this.start === that.start && this.end === that.end;
   }
   touches(that: Range): boolean {
-    return this.end + 1 >= that.start && this.start - 1 <= that.end;
+    return this.end + 1 == that.start || that.end + 1 == this.start;
+  }
+  overlaps(that: Range): boolean {
+    return this.end + 1 > that.start || that.end + 1 > this.start;
   }
 
   toString(): string {
@@ -67,6 +70,8 @@ export const reduceRanges = (ranges: Range[]): Range[] =>
       if (end > previous.end) {
         previous.end = end;
       }
+    } else if (previous.overlaps(range)) {
+      throw new Error(`Overlapping ranges: ${previous} ${range}`);
     } else {
       array.push(range);
     }

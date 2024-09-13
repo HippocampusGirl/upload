@@ -14,9 +14,12 @@ import { makeDownloadClientCommand } from "./client/download-client.js";
 import { makeUploadClientCommand } from "./client/upload-client.js";
 import { worker } from "./client/worker.js";
 import { makeServeCommand } from "./server/serve.js";
+import { name, version } from "./utils/metadata.js";
 
 export const command = new Command();
 command
+  .name(name)
+  .version(version)
   .option("--debug", "Output extra debug information")
   .addCommand(makeCreateTokenCommand())
   .addCommand(makeAddStorageProviderCommand())
@@ -32,7 +35,7 @@ command
     if (options["debug"]) {
       Debug.enable("*");
     } else {
-      Debug.enable("client,server,storage,data-source");
+      Debug.enable("client,server,storage,entity");
     }
   });
 

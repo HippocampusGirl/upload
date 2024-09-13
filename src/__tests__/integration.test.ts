@@ -1,4 +1,4 @@
-import { debug } from "console";
+import Debug from "debug";
 import { Stats } from "fs";
 import net from "net";
 import { exec } from "node:child_process";
@@ -16,6 +16,8 @@ import { command } from "../index.js";
 import { server } from "../server/serve.js";
 import { calculateChecksum } from "../utils/fs.js";
 
+const debug = Debug("test");
+
 const getPort = (): Promise<number> => {
   return new Promise((resolve, reject) => {
     const server = net.createServer();
@@ -31,6 +33,8 @@ const getPort = (): Promise<number> => {
 };
 
 describe("application", () => {
+  const abortController = new AbortController();
+
   let container: StartedLocalStackContainer | undefined;
 
   let port: number;
@@ -48,7 +52,7 @@ describe("application", () => {
 
   const storageProviderId = "local";
   const accessKeyId = "does-not-matter";
-  const tokenName = "test";
+  const tokenName = "download";
   const uploadFileName = "upload-file";
 
   const runShellCommand = promisify(exec);
@@ -59,7 +63,10 @@ describe("application", () => {
   beforeAll(async () => {
     port = await getPort();
 
+    debug("starting localstack container");
     container = await new LocalstackContainer().start();
+    debug("started localstack container");
+
     temporaryDirectory = await mkdtemp(join(tmpdir(), "upload-"));
     serverConnectionString = join(temporaryDirectory, "server.sqlite");
     downloadConnectionString = join(temporaryDirectory, "download.sqlite");
@@ -86,6 +93,7 @@ describe("application", () => {
     downloadFile = join(temporaryDirectory, tokenName, uploadFileName);
   }, 10 * 60 * 1000);
   afterAll(async () => {
+    abortController.abort();
     downloadClient?.terminate();
     await server?.terminate();
     if (container) {
@@ -181,10 +189,43 @@ describe("application", () => {
       "does-not-matter",
     ]);
   });
-
+  const check = async (): Promise<string | null> => {
+    let isRunning = true;
+    abortController.signal.addEventListener("abort", () => {
+      isRunning = false;
+    });
+    while (isRunning) {
+      await promisify(setTimeout)(1000);
+      let stats: Stats;
+      try {
+        stats = await lstat(downloadFile);
+      } catch {
+        debug("file %o not available yet", downloadFile);
+        continue;
+      }
+      expect(stats.isFile()).toBeTruthy();
+      if (downloadClient === undefined) {
+        debug("database not available yet");
+        continue;
+      }
+      const file = await downloadClient.controller.getFile(
+        tokenName,
+        uploadFileName
+      );
+      if (file === null) {
+        debug("file %o not in database yet", downloadFile);
+        continue;
+      }
+      if (file.verified) {
+        return calculateChecksum(downloadFile, "sha256");
+      }
+      debug("file %o not verified yet", downloadFile);
+    }
+    return null;
+  };
   it(
     "can transfer file",
-    async () => {
+    async (): Promise<void> => {
       await runCommand([
         "serve",
         "--database-type",
@@ -197,8 +238,10 @@ describe("application", () => {
         publicKeyFile,
         "--num-threads",
         "1",
+        "--interval",
+        "1000",
       ]);
-      await promisify(setTimeout)(2000);
+      await promisify(setTimeout)(1000);
       await runCommand([
         "upload-client",
         "--endpoint",
@@ -212,6 +255,7 @@ describe("application", () => {
         "--num-threads",
         "1",
       ]);
+      debug("started upload-client");
       await runCommand([
         "download-client",
         "--database-type",
@@ -227,41 +271,44 @@ describe("application", () => {
         "--num-threads",
         "1",
       ]);
-      for (;;) {
-        await promisify(setTimeout)(1000);
-        let stats: Stats;
-        try {
-          stats = await lstat(downloadFile);
-        } catch {
-          debug("file %o not available yet", downloadFile);
-          continue;
-        }
-        expect(stats.isFile()).toBeTruthy();
-        if (downloadClient === undefined) {
-          debug("database not available yet");
-          continue;
-        }
-        const file = await downloadClient.controller.getFile(
-          tokenName,
-          uploadFileName
-        );
-        if (file === null) {
-          debug("file not in database yet");
-          continue;
-        }
-        if (file.verified) {
-          break;
-        }
-        debug("file not verified yet");
-      }
-      const downloadFileChecksumSHA256 = await calculateChecksum(
-        downloadFile,
-        "sha256"
-      );
-      expect(uploadFileChecksumSHA256).toBe(downloadFileChecksumSHA256);
+      debug("started download-client");
+
+      return expect(check()).resolves.toBe(uploadFileChecksumSHA256);
     },
     1 * 60 * 1000
   );
 
-  it("can transfer modified file", async () => {});
+  it(
+    "can transfer modified file",
+    async () => {
+      await runShellCommand(
+        `dd if=/dev/urandom of=${uploadFile} conv=notrunc bs=1M count=1`
+      );
+      const modifiedUploadFileChecksumSHA256 = await calculateChecksum(
+        uploadFile,
+        "sha256"
+      );
+      expect(modifiedUploadFileChecksumSHA256).not.toBe(
+        uploadFileChecksumSHA256
+      );
+
+      await runCommand([
+        "upload-client",
+        "--endpoint",
+        `http://localhost:${port}`,
+        "--token",
+        uploadToken,
+        "--path",
+        uploadFile,
+        "--base-path",
+        temporaryDirectory,
+        "--num-threads",
+        "1",
+      ]);
+      debug("uploaded modified file");
+
+      return expect(check()).resolves.toBe(modifiedUploadFileChecksumSHA256);
+    },
+    1 * 60 * 1000
+  );
 });

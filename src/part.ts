@@ -8,13 +8,15 @@ export interface _File {
   path: string;
 }
 export interface FilePart extends _Part, _File {
-  size: number;
+  size: number; // total file size in bytes
 }
 export interface Job extends FilePart {
   url: string;
 }
 
-export const parseRange = (value: { range?: { start: number, end: number } | Range | undefined }) => {
+export const parseRange = (value: {
+  range?: { start: number; end: number } | Range | undefined;
+}) => {
   if (!value.range) {
     return;
   }

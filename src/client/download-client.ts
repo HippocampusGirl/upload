@@ -3,7 +3,7 @@ import Debug from "debug";
 import fastq, { queueAsPromised } from "fastq";
 import Joi from "joi";
 import { createHash } from "node:crypto";
-import { FileHandle, mkdir, open } from "node:fs/promises";
+import { access, constants, FileHandle, mkdir, open } from "node:fs/promises";
 import { dirname } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { join } from "path";
@@ -13,13 +13,14 @@ import { decode } from "@tsndr/cloudflare-worker-jwt";
 import { Controller } from "../controller.js";
 import { ChecksumJob, DownloadFile, DownloadJob } from "../download-schema.js";
 import { getDataSource } from "../entity/data-source.js";
+import { File } from "../entity/file.js";
 import { parseRange } from "../part.js";
 import { _ClientSocket } from "../socket.js";
 import { touch } from "../utils/fs.js";
 import { client, requestOptions } from "../utils/http-client.js";
 import { downloadPayloadSchema } from "../utils/payload.js";
 import { Progress } from "../utils/progress.js";
-import { Range } from "../utils/range.js";
+import { Range, reduceRanges } from "../utils/range.js";
 import { signal } from "../utils/signal.js";
 import { endpointSchema, makeClient } from "./socket-client.js";
 import { WorkerPool } from "./worker.js";
@@ -100,6 +101,31 @@ export const makeDownloadClientCommand = () => {
   return command;
 };
 
+const isComplete = async (file: File): Promise<boolean> => {
+  // debug("checking completion of file %o", file);
+  if (file.size === null || file.checksumSHA256 === null) {
+    // debug("file %o is not complete: size or checksum missing", file);
+    return false;
+  }
+  const parts = await file.parts;
+  if (parts.length === 0) {
+    // debug("file %o is not complete: no parts", file);
+    return false;
+  }
+  const ranges = parts
+    .filter(({ complete }) => complete)
+    .map(({ range }) => range);
+  const range = reduceRanges(ranges)[0];
+  if (range === undefined) {
+    // debug("file %o is not complete: no ranges", file);
+    return false;
+  }
+  const { start } = range;
+  const complete = start == 0 && range.size() == file.size;
+  // debug("checked completion of file %o: %o", file, complete);
+  return complete;
+};
+
 class DownloadClient {
   endpoint: string;
   token: string;
@@ -111,7 +137,7 @@ class DownloadClient {
   basePath: string | null;
 
   downloads: Set<string> = new Set();
-  checksumPaths: Set<string> = new Set();
+  checksums: Set<string> = new Set();
 
   controller: Controller;
 
@@ -144,6 +170,7 @@ class DownloadClient {
     this.socket.on("download:create", async (downloadJobs: DownloadJob[]) => {
       const promises: Promise<void>[] = [];
       for (const downloadJob of downloadJobs) {
+        // debug("received download job %o", downloadJob);
         try {
           parseRange(downloadJob);
 
@@ -161,7 +188,12 @@ class DownloadClient {
             continue;
           }
 
-          const key = `${downloadJob.path}:${downloadJob.range.toString()}`;
+          const key = [
+            downloadJob.n,
+            downloadJob.path,
+            downloadJob.range.toString(),
+            downloadJob.checksumMD5,
+          ].join(":");
           if (this.downloads.has(key)) {
             continue;
           }
@@ -174,6 +206,9 @@ class DownloadClient {
         }
       }
       await Promise.all(promises);
+      for (const downloadJob of downloadJobs) {
+        await this.verify(downloadJob);
+      }
     });
     this.socket.on("download:checksum", async (checksumJob: ChecksumJob) => {
       try {
@@ -221,7 +256,7 @@ class DownloadClient {
         readStream,
         async function* (source: AsyncIterable<Buffer>) {
           for await (const chunk of source) {
-            md5.update(chunk);
+            md5.update(chunk as unknown as Uint8Array);
             size += chunk.length;
 
             progress.pulse();
@@ -251,13 +286,13 @@ class DownloadClient {
     if (etag !== md5.digest("hex")) {
       throw new Error(
         "Received invalid response from server: " +
-          '"etag" does not match MD5 checksum calculated from response body'
+        '"etag" does not match MD5 checksum calculated from response body'
       );
     }
     if (downloadJob.checksumMD5 !== etag) {
       throw new Error(
         "Received invalid response from server: " +
-          '"etag" does not match MD5 checksum received from server'
+        '"etag" does not match MD5 checksum received from server'
       );
     }
     return {
@@ -268,34 +303,47 @@ class DownloadClient {
 
   async verify(job: DownloadFile): Promise<void> {
     const file = await this.controller.getFile(job.n, job.path);
+    const path = this.makePath(job);
 
     if (file === null) {
       return;
     }
-    if (!file.complete) {
+    const complete = await isComplete(file);
+    if (!complete) {
+      // debug("not running checksum because file is not complete: %s", path);
       return;
     }
     if (file.checksumSHA256 === null) {
+      // debug(
+      //   "not running checksum because target value is not available: %s",
+      //   path
+      // );
       return;
     }
 
     if (!file.verified) {
-      const path = this.makePath(job);
-
-      if (this.checksumPaths.has(path)) {
-        // debug("already verifying checksum for %s", path);
+      try {
+        await access(path, constants.R_OK);
+      } catch (error) {
+        // debug("not running checksum because file does not exist: %s", path);
         return;
       }
-      this.checksumPaths.add(path);
+
+      if (this.checksums.has(file.checksumSHA256)) {
+        // debug("already verifying checksum %s", file.checksumSHA256);
+        return;
+      }
+      this.checksums.add(file.checksumSHA256);
 
       // debug("verifying checksum for %s", path);
       const checksumSHA256 = await this.workerPool.submitCalculateChecksum(
         path,
         "sha256"
       );
+      this.checksums.delete(file.checksumSHA256);
       if (checksumSHA256 === file.checksumSHA256) {
-        debug("verified checksum for %s", path);
         await this.controller.setVerified(file.n, file.path);
+        debug("verified checksum for %s", path);
       } else {
         throw new Error(
           `Invalid checksum for ${path}: ${checksumSHA256} != ${file.checksumSHA256}`
@@ -326,7 +374,8 @@ class DownloadClient {
         downloadJob
       );
     }
-    await this.verify(downloadJob);
+    const { n, path } = downloadJob;
+    await this.verify({ n, path });
   }
 
   async runDownloadJob(downloadJob: DownloadJob): Promise<void> {

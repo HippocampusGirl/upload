@@ -4,6 +4,7 @@ import { io, ManagerOptions, SocketOptions } from "socket.io-client";
 import msgpackParser from "socket.io-msgpack-parser";
 
 import { _ClientSocket } from "../socket.js";
+import { version } from "../utils/metadata.js";
 import { getHttpsProxyAgent } from "../utils/proxy.js";
 
 const debug = Debug("client");
@@ -17,6 +18,9 @@ export const makeClient = (endpoint: string, token: string): _ClientSocket => {
     ackTimeout: 5000, // 5 seconds
     retries: 100,
     parser: msgpackParser,
+    extraHeaders: {
+      "upload-client-version": version,
+    },
   };
 
   const agent = getHttpsProxyAgent();

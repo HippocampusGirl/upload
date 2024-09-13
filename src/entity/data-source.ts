@@ -7,7 +7,7 @@ import { File } from "./file.js";
 import { Part } from "./part.js";
 import { StorageProvider } from "./storage-provider.js";
 
-const debug = Debug("data-source");
+const debug = Debug("entity");
 export const getDataSource = async (
   type: "sqlite" | "postgres",
   connectionString: string,

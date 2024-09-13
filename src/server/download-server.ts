@@ -18,13 +18,15 @@ const checksumMD5Schema = Joi.string().required().hex().length(32);
 export class DownloadServer {
   io: _Server;
   isLooping: boolean;
+  interval: number;
 
   downloads: Set<string> = new Set();
   checksums: Set<string> = new Set();
 
-  constructor(io: _Server) {
+  constructor(io: _Server, interval: number) {
     this.io = io;
     this.isLooping = false;
+    this.interval = interval;
   }
 
   listen(socket: _ServerSocket) {
@@ -58,6 +60,7 @@ export class DownloadServer {
           );
           callback({ error: "unknown" });
         }
+        // debug("download complete %o", downloadJob);
         callback(undefined);
       }
     );
@@ -82,7 +85,7 @@ export class DownloadServer {
     this.checksums.clear();
 
     const loop = this.loop.bind(this);
-    setTimeout(loop, 1000);
+    setTimeout(loop, 1);
   }
   async loop(): Promise<void> {
     if (!this.isLooping) {
@@ -95,7 +98,7 @@ export class DownloadServer {
     await Promise.all(storageProviders.map(this.checkDownloadJobs, this));
 
     const loop = this.loop.bind(this);
-    setTimeout(loop, 1 * 60 * 1000); // 1 minute
+    setTimeout(loop, this.interval);
   }
   stopLoop(): void {
     this.isLooping = false;
@@ -126,16 +129,7 @@ export class DownloadServer {
     const { controller } = this.io;
     const { storage } = storageProvider;
 
-    const checkChecksumJob = async (file: File): Promise<void> => {
-      const checksumSHA256 = file.checksumSHA256;
-      if (checksumSHA256 !== null) {
-        if (!this.checksums.has(checksumSHA256)) {
-          await this.submitChecksumJob(file);
-          this.checksums.add(checksumSHA256);
-        }
-      }
-    };
-
+    let fileIdsForChecksumJobs: Set<number> = new Set();
     let downloadJobs: DownloadJob[] = [];
     for await (const object of storage.listObjects()) {
       try {
@@ -167,7 +161,7 @@ export class DownloadServer {
         if (range.size() !== object.Size) {
           throw new Error(
             "Mismatched size between object and range in file name: " +
-              `${object.Size} != ${range.size()}`
+            `${object.Size} != ${range.size()}`
           );
         }
 
@@ -185,17 +179,22 @@ export class DownloadServer {
           continue;
         }
         const file = part.file;
-        if (file.verified) {
+        if (file.verified === true) {
           debug("deleting part of verified file %o", object.Key);
           await storage.deleteFile(object.Bucket, object.Key);
           continue;
         }
-        checkChecksumJob(file);
+        fileIdsForChecksumJobs.add(file.id);
 
-        const key = `${storageProvider.id}:${object.Bucket}:${
-          object.Key
-        }:${range.toString()}`;
+        const key = [
+          storageProvider.id,
+          object.Bucket,
+          object.Key,
+          range.toString(),
+          checksumMD5,
+        ].join(":");
         if (this.downloads.has(key)) {
+          // debug("already downloading file %o", object.Key);
           continue;
         }
         this.downloads.add(key);
@@ -211,11 +210,19 @@ export class DownloadServer {
       }
     }
 
-    for (const file of await controller.getFilesToVerify()) {
-      checkChecksumJob(file);
-    }
-
     this.sendDownloadJobs(downloadJobs);
+
+    for (const file of await controller.getFilesToVerify()) {
+      fileIdsForChecksumJobs.add(file.id);
+    }
+    // debug("sending %o checksum jobs", fileIdsForChecksumJobs.size);
+    for (const fileId of fileIdsForChecksumJobs) {
+      const file = await controller.getFileById(fileId);
+      if (file === null) {
+        throw new Error(`File not found for id ${fileId}`);
+      }
+      await this.submitChecksumJob(file);
+    }
   }
 
   private sendDownloadJobs(downloadJobs: DownloadJob[]): void {

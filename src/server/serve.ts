@@ -8,7 +8,8 @@ import { availableParallelism } from "node:os";
 import { dirname, extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { Server as SocketServer, Socket } from "socket.io";
+import { lt, valid } from "semver";
+import { Socket, Server as SocketServer } from "socket.io";
 import msgpackParser from "socket.io-msgpack-parser";
 
 import { createAdapter, setupPrimary } from "@socket.io/cluster-adapter";
@@ -18,7 +19,7 @@ import { decode, JwtData, verify } from "@tsndr/cloudflare-worker-jwt";
 import { Controller } from "../controller.js";
 import { getDataSource } from "../entity/data-source.js";
 import { UnauthorizedError } from "../errors.js";
-import { _Server } from "../socket.js";
+import { _Server, lastCompatibleVersion } from "../socket.js";
 import { Storage } from "../storage/base.js";
 import { tsNodeArgv } from "../utils/loader.js";
 import { Payload, payloadSchema } from "../utils/payload.js";
@@ -28,8 +29,8 @@ import { UploadServer } from "./upload-server.js";
 
 // Allow socket to store payload
 declare module "socket.io" {
-  interface Socket extends ExtendedSocket {}
-  interface Server extends ExtendedServer {}
+  interface Socket extends ExtendedSocket { }
+  interface Server extends ExtendedServer { }
 }
 interface ExtendedSocket {
   bucket: string;
@@ -60,6 +61,12 @@ export const makeServeCommand = () => {
     .requiredOption(
       "--connection-string <path>",
       "Connection string to the database"
+    )
+    .addOption(
+      new Option(
+        "--interval <number>",
+        "Interval in milliseconds to check for new uploads"
+      ).default(1 * 60 * 1000)
     )
     .addOption(
       new Option(
@@ -94,6 +101,7 @@ export const makeServeCommand = () => {
         publicKey,
         controller,
         parseInt(options["numThreads"], 10),
+        parseInt(options["interval"], 10),
         args.slice()
       );
       await server.serve();
@@ -113,6 +121,7 @@ class Server {
   publicKey: string;
   controller: Controller;
   numThreads: number;
+  interval: number;
   args: string[];
 
   httpServer: HttpServer;
@@ -123,12 +132,14 @@ class Server {
     publicKey: string,
     controller: Controller,
     numThreads: number,
+    interval: number,
     args: string[]
   ) {
     this.port = port;
     this.publicKey = publicKey;
     this.controller = controller;
     this.numThreads = numThreads;
+    this.interval = interval;
     this.args = args;
 
     process.on("unhandledRejection", (error: Error) => {
@@ -145,7 +156,7 @@ class Server {
     await promisify(cluster.disconnect)();
   }
 
-  servePrimary(): Promise<unknown> {
+  async servePrimary(): Promise<void> {
     debug("start primary %o", process.pid);
 
     sticky.setupMaster(this.httpServer, {
@@ -183,7 +194,8 @@ class Server {
       }
     });
 
-    return Promise.all(this.workers.map((worker) => once(worker, "online")));
+    await Promise.all(this.workers.map((worker) => once(worker, "online")));
+    // debug("all workers are online");
   }
 
   serveWorker(): Promise<unknown> {
@@ -203,6 +215,23 @@ class Server {
     // based on socketio-jwt/src/authorize.ts
     io.use(async (socket, next) => {
       const handshake = socket.handshake;
+
+      const headers = handshake.headers;
+      const clientVersionString = headers["upload-client-version"];
+      if (clientVersionString === undefined) {
+        return next(new UnauthorizedError("Missing client version"));
+      }
+      if (typeof clientVersionString !== "string") {
+        return next(new UnauthorizedError("Client version needs to be string"));
+      }
+      const clientVersion = valid(clientVersionString);
+      if (clientVersion === null) {
+        return next(new UnauthorizedError("Invalid client version"));
+      }
+      if (lt(clientVersion, lastCompatibleVersion)) {
+        return next(new UnauthorizedError("Please update your client version"));
+      }
+
       const { token } = handshake.auth;
       if (token === undefined) {
         return next(new UnauthorizedError("Missing authorization token"));
@@ -272,7 +301,10 @@ class Server {
       return next();
     });
 
-    const downloadServer: DownloadServer = new DownloadServer(io);
+    const downloadServer: DownloadServer = new DownloadServer(
+      io,
+      this.interval
+    );
     const uploadServer: UploadServer = new UploadServer(io);
 
     io.on("connection", (socket: Socket) => {
@@ -294,7 +326,8 @@ class Server {
       return this.servePrimary();
     } else if (cluster.isWorker) {
       return this.serveWorker();
+    } else {
+      throw new Error("serve must be called from primary or worker");
     }
-    return Promise.reject();
   }
 }
