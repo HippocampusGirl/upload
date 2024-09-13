@@ -2,7 +2,10 @@
   "name": "@hippocampusgirl/upload",
   "version": "0.5.0",
   "description": "A software for data transfers via the cloud",
-  "repository": "https://github.com/HippocampusGirl/upload",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HippocampusGirl/upload.git"
+  },
   "exports": "./build/index.ts",
   "files": [
     "build",
@@ -13,7 +16,7 @@
     "node": ">=20.9"
   },
   "bin": {
-    "upload": "./build/index.js"
+    "upload": "build/index.js"
   },
   "scripts": {
     "build": "npx tsc",
