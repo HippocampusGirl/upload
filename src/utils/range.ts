@@ -19,7 +19,7 @@ export class Range {
     return this.end + 1 == that.start || that.end + 1 == this.start;
   }
   overlaps(that: Range): boolean {
-    return this.end + 1 > that.start || that.end + 1 > this.start;
+    return (this.end + 1 > that.start) && (that.end + 1 > this.start);
   }
 
   toString(): string {
