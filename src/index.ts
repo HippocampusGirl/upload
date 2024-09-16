@@ -1,4 +1,4 @@
-#!/usr/bin/env -S node --enable-source-maps --no-warnings
+#!/usr/bin/env -S NODE_OPTIONS="--no-warnings --enable-source-maps" node
 
 import "reflect-metadata";
 
