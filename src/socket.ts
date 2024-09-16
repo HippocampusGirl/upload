@@ -34,7 +34,6 @@ interface ServerToClientEvents {
 interface ServerSideEvents {}
 interface SocketData {}
 
-export const lastCompatibleVersion = "0.5.0";
 export type _Server = Server<
   ClientToServerEvents,
   ServerToClientEvents,
