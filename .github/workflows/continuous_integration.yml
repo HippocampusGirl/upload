@@ -24,7 +24,7 @@ jobs:
           node-version: 22
       - uses: cachix/install-nix-action@V27
 
-      - run: npm clean-install --include=dev
+      - run: npm clean-install
       - run: npm test
         env:
           CI: true
