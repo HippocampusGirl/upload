@@ -85,7 +85,8 @@ export const makeDownloadClientCommand = () => {
 
       const dataSource = await getDataSource(
         options["databaseType"],
-        options["connectionString"]
+        options["connectionString"],
+        options["debug"]
       );
       const controller = new Controller(dataSource);
       downloadClient = new DownloadClient(
@@ -202,7 +203,7 @@ class DownloadClient {
           this.progress.addPart(downloadJob);
           promises.push(this.queue.push(downloadJob));
         } catch (error) {
-          debug("failed to process download job: %o", error);
+          debug("failed to process download job: %O", error);
         }
       }
       await Promise.all(promises);
@@ -216,7 +217,7 @@ class DownloadClient {
         await this.controller.setChecksumSHA256(n, path, checksumSHA256);
         await this.verify(checksumJob);
       } catch (error) {
-        debug("failed to process checksum job: %o", error);
+        debug("failed to process checksum job: %O", error);
       }
     });
     signal.finally(() => {

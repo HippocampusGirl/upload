@@ -1,11 +1,54 @@
+import Debug from "debug";
 import fastq, { queueAsPromised } from "fastq";
-import { DataSource, EntityManager, IsNull, Not } from "typeorm";
+import {
+  DataSource,
+  EntityManager,
+  EntityTarget,
+  InsertResult,
+  IsNull,
+  Not,
+  ObjectLiteral,
+} from "typeorm";
 
 import { File } from "./entity/file.js";
 import { Part } from "./entity/part.js";
 import { StorageProvider } from "./entity/storage-provider.js";
 import { FilePart } from "./part.js";
 import { Range } from "./utils/range.js";
+
+const debug = Debug("controller");
+
+const upsert = <Entity extends ObjectLiteral>(
+  manager: EntityManager,
+  target: EntityTarget<Entity>,
+  entity: Partial<Entity>,
+  conflictKeys: (keyof Entity)[]
+): Promise<InsertResult> => {
+  const metadata = manager.connection.getMetadata(target);
+
+  const conflictColumns = metadata.mapPropertyPathsToColumns(
+    conflictKeys as string[]
+  );
+  const overwriteColumns = metadata
+    .mapPropertyPathsToColumns(Object.keys(entity))
+    .filter((column) => !conflictColumns.includes(column));
+
+  return manager
+    .getRepository(target)
+    .createQueryBuilder()
+    .insert()
+    .values(entity)
+    .updateEntity(false)
+    .orUpdate(
+      [...conflictColumns, ...overwriteColumns].map((col) => col.databaseName),
+      conflictColumns.map((col) => col.databaseName),
+      {
+        skipUpdateIfNoValuesChanged: true,
+        upsertType: "on-conflict-do-update",
+      }
+    )
+    .execute();
+};
 
 export class Controller {
   dataSource: DataSource;
@@ -33,14 +76,12 @@ export class Controller {
     checksumSHA256: string
   ): Promise<void> {
     return await this.submitTransaction(async (manager) => {
-      const result = await manager.upsert(
+      await upsert(
+        manager,
         File,
         { n, path, checksumSHA256, verified: false },
         ["n", "path"]
       );
-      if (result.identifiers.length !== 1) {
-        throw new Error(`File not found for ${n} ${path}`);
-      }
     });
   }
 
@@ -48,14 +89,12 @@ export class Controller {
     const { path, range, checksumMD5, size } = filePart;
     const { start, end } = range;
     return this.submitTransaction(async (manager): Promise<boolean> => {
-      await manager.upsert(File, { n, path, size, verified: false }, [
+      debug("adding file part %O", filePart);
+      await upsert(manager, File, { n, path, size, verified: false }, [
         "n",
         "path",
       ]);
-      const file = await manager.findOneBy(File, {
-        n,
-        path,
-      });
+      const file = await manager.findOneBy(File, { n, path });
       if (file === null) {
         throw new Error(`Could not create file for ${filePart}`);
       }
@@ -67,7 +106,8 @@ export class Controller {
         return !part.complete;
       }
 
-      await manager.upsert(
+      await upsert(
+        manager,
         Part,
         { start, end, file_id: file.id, checksumMD5, complete: false },
         ["start", "end", "file_id"]

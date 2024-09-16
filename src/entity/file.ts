@@ -1,14 +1,11 @@
-import Debug from "debug";
 import { Column, Entity, Index, OneToMany, PrimaryGeneratedColumn } from "typeorm";
 
 import { Part } from "./part.js";
 
-const debug = Debug("entity");
-
 @Entity("files")
 @Index(["n", "path"], { unique: true })
 export class File {
-  @PrimaryGeneratedColumn()
+  @PrimaryGeneratedColumn("increment", { type: "integer" })
   id: number;
 
   @Column({ type: "varchar" })

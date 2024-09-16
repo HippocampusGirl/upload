@@ -20,6 +20,7 @@ export const getDataSource = async (
     subscribers: [],
     migrations: [],
     entitySkipConstructor: true,
+    cache: false,
   };
   debug("connecting to %o database at %o", type, connectionString);
   let dataSource: DataSource;
@@ -29,6 +30,7 @@ export const getDataSource = async (
         type: "better-sqlite3",
         driver: betterSqlite3,
         database: connectionString,
+        logger: "debug",
         ...config,
       }).initialize();
 
@@ -42,6 +44,7 @@ export const getDataSource = async (
         driver: pg,
         url: connectionString,
         parseInt8: true,
+        logger: "debug",
         ...config,
       }).initialize();
     default:

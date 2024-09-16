@@ -1,6 +1,6 @@
 {
   "name": "@hippocampusgirl/upload",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "description": "A software for data transfers via the cloud",
   "repository": {
     "type": "git",
@@ -20,7 +20,7 @@
   },
   "scripts": {
     "build": "npx tsc",
-    "test": "NODE_OPTIONS=\"--experimental-vm-modules --trace-warnings\" jest",
+    "test": "NODE_OPTIONS=\"--experimental-vm-modules --trace-warnings --enable-source-maps\" jest",
     "version": "pre-commit run --files package-lock.json || git add default.nix"
   },
   "author": "Lea Waller <lea@lea.science>",
@@ -50,7 +50,7 @@
     "socket.io": "^4.7.2",
     "socket.io-client": "^4.7.2",
     "socket.io-msgpack-parser": "^3.0.2",
-    "typeorm": "^0.3.17"
+    "typeorm": "^0.3.20"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240320.1",
