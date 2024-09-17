@@ -34,9 +34,9 @@ const upsert = <Entity extends ObjectLiteral>(
     .filter((column) => !conflictColumns.includes(column));
 
   return manager
-    .getRepository(target)
     .createQueryBuilder()
     .insert()
+    .into(target)
     .values(entity)
     .updateEntity(false)
     .orUpdate(

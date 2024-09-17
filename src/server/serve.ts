@@ -266,7 +266,11 @@ class Server {
         const { n, s } = payload;
         const storageProvider = await controller.getStorageProvider(s);
         if (storageProvider === null) {
-          return next(new UnauthorizedError("Invalid token storage provider"));
+          return next(
+            new UnauthorizedError(
+              `Invalid token: storage provider "${s}" not found`
+            )
+          );
         }
         try {
           const { storage } = storageProvider;

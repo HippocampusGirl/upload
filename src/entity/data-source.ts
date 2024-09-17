@@ -8,8 +8,10 @@ import { Part } from "./part.js";
 import { StorageProvider } from "./storage-provider.js";
 
 const debug = Debug("entity");
+
+export type DatabaseType = "sqlite" | "postgres";
 export const getDataSource = async (
-  type: "sqlite" | "postgres",
+  type: DatabaseType,
   connectionString: string,
   logging: boolean = false
 ): Promise<DataSource> => {

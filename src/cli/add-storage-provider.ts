@@ -53,6 +53,7 @@ export const makeAddStorageProviderCommand = (): Command => {
         downloadUrlTemplate: options["downloadUrlTemplate"],
       });
       await dataSource.manager.save(storageProvider);
+      await dataSource.destroy();
     });
   return command;
 };

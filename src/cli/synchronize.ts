@@ -23,7 +23,8 @@ export const makeSynchronizeCommand = (): Command => {
         options["connectionString"],
         true
       );
-      dataSource.synchronize();
+      await dataSource.synchronize();
+      await dataSource.destroy();
     });
   return command;
 };
