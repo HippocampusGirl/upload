@@ -94,7 +94,15 @@ export class DownloadServer {
     }
 
     debug("checking for new download jobs");
-    const storageProviders = await this.io.controller.getStorageProviders();
+    const storageProviders = [];
+    const seen: Set<string> = new Set();
+    for (const storageProvider of await this.io.controller.getStorageProviders()) {
+      if (seen.has(storageProvider.key)) {
+        continue;
+      }
+      seen.add(storageProvider.key);
+      storageProviders.push(storageProvider);
+    }
     await Promise.all(storageProviders.map(this.checkDownloadJobs, this));
 
     const loop = this.loop.bind(this);
@@ -161,7 +169,7 @@ export class DownloadServer {
         if (range.size() !== object.Size) {
           throw new Error(
             "Mismatched size between object and range in file name: " +
-            `${object.Size} != ${range.size()}`
+              `${object.Size} != ${range.size()}`
           );
         }
 

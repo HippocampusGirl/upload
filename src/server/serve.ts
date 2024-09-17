@@ -65,7 +65,7 @@ export const makeServeCommand = () => {
       new Option(
         "--interval <number>",
         "Interval in milliseconds to check for new uploads"
-      ).default(1 * 60 * 1000)
+      ).default(5 * 60 * 1000) // 5 minutes
     )
     .addOption(
       new Option(

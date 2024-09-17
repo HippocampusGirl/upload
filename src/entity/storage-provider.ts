@@ -43,6 +43,11 @@ export class StorageProvider implements _StorageProvider {
     this.downloadUrlTemplate = downloadUrlTemplate || null;
   }
 
+  get key(): string {
+    const { endpoint, region, accessKeyId } = this;
+    return [endpoint, region, accessKeyId].join(":");
+  }
+
   get s3(): S3Client {
     return new S3Client({
       forcePathStyle: true,
@@ -62,7 +67,8 @@ export class StorageProvider implements _StorageProvider {
   get storage(): Storage {
     if (this.isBackblaze) {
       return new B2Storage(this);
+    } else {
+      return new S3Storage(this);
     }
-    return new S3Storage(this);
   }
 }
