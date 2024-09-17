@@ -43,18 +43,18 @@ describe("controller", () => {
 
     const range = new Range(0, 10);
     const filePart = { path, range, checksumMD5, size };
-    expect(controller.addFilePart(n, filePart)).resolves.toBeTruthy();
+    expect(controller.addPart(n, filePart)).resolves.toBeTruthy();
     const part = await controller.getPart(checksumMD5, range);
     expect(part).not.toBeFalsy();
     expect(part).toMatchObject({ range });
     expect(part!.file).toMatchObject({ path });
 
-    expect(controller.completePart(n, filePart)).resolves.toMatchObject({
+    await expect(controller.setComplete(n, filePart)).resolves.toMatchObject({
       path,
       size,
     });
 
-    expect(controller.addFilePart(n, filePart)).resolves.toBeFalsy();
+    await expect(controller.addPart(n, filePart)).resolves.toBeFalsy();
   });
 
   it("can add and retrieve file by checksum", async () => {
@@ -63,24 +63,44 @@ describe("controller", () => {
 
     const checksumSHA256 = randomBytes(32).toString("hex");
     expect(checksumSHA256.length).toBe(64);
+    const checksumMD5 = randomBytes(16).toString("hex");
+    expect(checksumMD5.length).toBe(32);
 
     const path = "file-checksum-path";
 
     expect(
       controller.setChecksumSHA256(n, path, checksumSHA256)
     ).resolves.toBeUndefined();
-    let file = await controller.getFile(n, path);
+    let file = await controller.getFileByPath(n, path);
     expect(file).not.toBeFalsy();
     expect(file).toMatchObject({ path, checksumSHA256, verified: false });
 
-    const files = await controller.getFilesToVerify();
+    const files = await controller.getUnverifiedFiles();
     expect(files).toHaveLength(1);
     expect(files[0]).toMatchObject({ path, checksumSHA256, verified: false });
 
+    const size = 100;
+    const range = new Range(0, 10);
+    const filePart = { path, range, checksumMD5, size };
+    await expect(controller.addPart(n, filePart)).resolves.toBeTruthy();
+
     await controller.setVerified(n, path);
-    file = await controller.getFile(n, path);
-    expect(file).not.toBeFalsy();
-    expect(file).toMatchObject({ path, checksumSHA256, verified: true });
+    await expect(controller.getFileByPath(n, path)).resolves.toMatchObject({
+      path,
+      checksumSHA256,
+      verified: true,
+    });
+
+    await expect(controller.addPart(n, filePart)).resolves.toBeTruthy();
+    await expect(controller.setComplete(n, filePart)).resolves.toMatchObject({
+      path,
+      size,
+    });
+    await expect(controller.getFileByPath(n, path)).resolves.toMatchObject({
+      path,
+      checksumSHA256,
+      verified: true,
+    });
   });
 
   it("can add and retrieve file by parts", async () => {
@@ -94,10 +114,10 @@ describe("controller", () => {
     const range = new Range(0, 10);
     const size = 100;
     expect(
-      controller.addFilePart(n, { path, range, checksumMD5, size })
+      controller.addPart(n, { path, range, checksumMD5, size })
     ).resolves.toBeTruthy();
 
-    const file = await controller.getFile(n, path);
+    const file = await controller.getFileByPath(n, path);
     expect(file).not.toBeNull();
     expect(file).toMatchObject({ path, size });
 
@@ -114,7 +134,7 @@ describe("controller", () => {
     // Update checksum
     checksumMD5 = randomBytes(16).toString("hex");
     expect(
-      controller.addFilePart(n, { path, range, checksumMD5, size })
+      controller.addPart(n, { path, range, checksumMD5, size })
     ).resolves.toBeTruthy();
   });
 
@@ -131,7 +151,7 @@ describe("controller", () => {
 
     const range = new Range(65037519650, 65105980196);
     expect(
-      controller.addFilePart(n, {
+      controller.addPart(n, {
         path,
         range,
         checksumMD5,
@@ -139,7 +159,7 @@ describe("controller", () => {
       })
     ).resolves.toBeTruthy();
 
-    const file = await controller.getFile(n, path);
+    const file = await controller.getFileByPath(n, path);
     expect(file).not.toBeNull();
     expect(file!.size).toBe(size);
   });
@@ -155,14 +175,14 @@ describe("controller", () => {
     const range = new Range(0, 10);
     const filePart = { path, range, checksumMD5, size };
     await expect(
-      new Controller(dataSource).addFilePart(n, filePart)
+      new Controller(dataSource).addPart(n, filePart)
     ).resolves.toBeTruthy();
 
     const dataSource_ = await getDataSource("sqlite", connectionString, true);
     expect(dataSource_.isInitialized).toBe(true);
 
     expect(
-      new Controller(dataSource_).addFilePart(n, filePart)
+      new Controller(dataSource_).addPart(n, filePart)
     ).resolves.toBeTruthy();
   });
 });

@@ -70,6 +70,37 @@ export class Controller {
     return this.dataSource.transaction("SERIALIZABLE", callback);
   }
 
+  // File
+  async getFileById(id: number): Promise<File | null> {
+    return this.submitTransaction(
+      async (manager): Promise<File | null> =>
+        manager.findOne(File, { where: { id } })
+    );
+  }
+  async getFileByPath(n: string, path: string): Promise<File | null> {
+    return this.submitTransaction(async (manager): Promise<File | null> => {
+      return manager.findOne(File, {
+        where: { n, path },
+        relations: { parts: true },
+      });
+    });
+  }
+  async getUnverifiedFiles(): Promise<File[]> {
+    return this.submitTransaction(async (manager): Promise<File[]> => {
+      return await manager.find(File, {
+        where: { checksumSHA256: Not(IsNull()), verified: false },
+      });
+    });
+  }
+  async setVerified(n: string, path: string): Promise<void> {
+    return this.submitTransaction(async (manager): Promise<void> => {
+      const repository = manager.getRepository(File);
+      const result = await repository.update({ n, path }, { verified: true });
+      if (result.affected !== 1) {
+        throw new Error(`File not found for ${n} ${path}`);
+      }
+    });
+  }
   async setChecksumSHA256(
     n: string,
     path: string,
@@ -85,15 +116,14 @@ export class Controller {
     });
   }
 
-  async addFilePart(n: string, filePart: FilePart): Promise<boolean> {
+  // Part
+  async addPart(n: string, filePart: FilePart): Promise<boolean> {
     const { path, range, checksumMD5, size } = filePart;
     const { start, end } = range;
     return this.submitTransaction(async (manager): Promise<boolean> => {
       debug("adding file part %O", filePart);
-      await upsert(manager, File, { n, path, size, verified: false }, [
-        "n",
-        "path",
-      ]);
+
+      await upsert(manager, File, { n, path, size }, ["n", "path"]);
       const file = await manager.findOneBy(File, { n, path });
       if (file === null) {
         throw new Error(`Could not create file for ${filePart}`);
@@ -106,6 +136,7 @@ export class Controller {
         return !part.complete;
       }
 
+      await manager.update(File, { id: file.id }, { verified: false });
       await upsert(
         manager,
         Part,
@@ -115,22 +146,16 @@ export class Controller {
       return true;
     });
   }
-
   async getPart(checksumMD5: string, range: Range): Promise<Part | null> {
     return this.submitTransaction(async (manager): Promise<Part | null> => {
+      const { start, end } = range;
       return manager.findOne(Part, {
-        where: {
-          checksumMD5,
-          start: range.start,
-          end: range.end,
-        },
-        relations: {
-          file: true,
-        },
+        where: { checksumMD5, start, end },
+        relations: { file: true },
       });
     });
   }
-  async completePart(n: string, filePart: FilePart): Promise<File> {
+  async setComplete(n: string, filePart: FilePart): Promise<File> {
     const {
       path,
       range: { start, end },
@@ -152,39 +177,7 @@ export class Controller {
     });
   }
 
-  async getFileById(id: number): Promise<File | null> {
-    return this.submitTransaction(async (manager): Promise<File | null> => {
-      return manager.findOne(File, { where: { id } });
-    });
-  }
-  async getFile(n: string, path: string): Promise<File | null> {
-    return this.submitTransaction(async (manager): Promise<File | null> => {
-      return manager.findOne(File, {
-        where: { n, path },
-        relations: { parts: true },
-      });
-    });
-  }
-  async getFilesToVerify(): Promise<File[]> {
-    return this.submitTransaction(async (manager): Promise<File[]> => {
-      return await manager.find(File, {
-        where: { checksumSHA256: Not(IsNull()), verified: false },
-      });
-    });
-  }
-  async setVerified(n: string, path: string): Promise<void> {
-    return this.submitTransaction(async (manager): Promise<void> => {
-      const result = await manager.update(
-        File,
-        { n, path },
-        { verified: true }
-      );
-      if (result.affected !== 1) {
-        throw new Error(`File not found for ${n} ${path}`);
-      }
-    });
-  }
-
+  // StorageProvider
   async getStorageProvider(id: string): Promise<StorageProvider | null> {
     return this.dataSource.manager.findOneBy(StorageProvider, { id });
   }

@@ -220,7 +220,7 @@ export class DownloadServer {
 
     this.sendDownloadJobs(downloadJobs);
 
-    for (const file of await controller.getFilesToVerify()) {
+    for (const file of await controller.getUnverifiedFiles()) {
       fileIdsForChecksumJobs.add(file.id);
     }
     // debug("sending %o checksum jobs", fileIdsForChecksumJobs.size);

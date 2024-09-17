@@ -30,7 +30,7 @@ export class Progress {
     // eta = makeEta({ min: 0, max: total, historyTimeConstant: 30 });
   }
 
-  completePart(part: _Part): void {
+  setComplete(part: _Part): void {
     this.bytes += part.range.size();
     this.update();
   }

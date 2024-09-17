@@ -247,7 +247,7 @@ describe.each([postgresDatabaseConfigFactory])(
           debug("database not available yet");
           continue;
         }
-        const file = await downloadClient.controller.getFile(
+        const file = await downloadClient.controller.getFileByPath(
           tokenName,
           uploadFileName
         );

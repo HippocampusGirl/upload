@@ -36,7 +36,7 @@ export class UploadServer {
       // Check if already exists
       let success;
       try {
-        success = await controller.addFilePart(n, uploadRequest);
+        success = await controller.addPart(n, uploadRequest);
       } catch (error) {
         debug("unknown error adding file part: %O", error);
         return { error: "unknown" };
@@ -77,7 +77,7 @@ export class UploadServer {
         parseRange(uploadJob);
         // debug("received complete event for upload job %o", uploadJob);
         try {
-          await controller.completePart(n, uploadJob);
+          await controller.setComplete(n, uploadJob);
         } catch (error) {
           debug(error);
           callback({ error: "unknown" });

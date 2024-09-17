@@ -175,10 +175,7 @@ class DownloadClient {
         try {
           parseRange(downloadJob);
 
-          const run = await this.controller.addFilePart(
-            downloadJob.n,
-            downloadJob
-          );
+          const run = await this.controller.addPart(downloadJob.n, downloadJob);
           if (!run) {
             // debug(
             //   "not adding download job for %s in range %s because it already exists",
@@ -287,13 +284,13 @@ class DownloadClient {
     if (etag !== md5.digest("hex")) {
       throw new Error(
         "Received invalid response from server: " +
-        '"etag" does not match MD5 checksum calculated from response body'
+          '"etag" does not match MD5 checksum calculated from response body'
       );
     }
     if (downloadJob.checksumMD5 !== etag) {
       throw new Error(
         "Received invalid response from server: " +
-        '"etag" does not match MD5 checksum received from server'
+          '"etag" does not match MD5 checksum received from server'
       );
     }
     return {
@@ -303,7 +300,7 @@ class DownloadClient {
   }
 
   async verify(job: DownloadFile): Promise<void> {
-    const file = await this.controller.getFile(job.n, job.path);
+    const file = await this.controller.getFileByPath(job.n, job.path);
     const path = this.makePath(job);
 
     if (file === null) {
@@ -355,7 +352,7 @@ class DownloadClient {
     await this.socket.emitWithAck("download:verified", job);
   }
   async finalizeDownloadJob(downloadJob: CompletedDownloadJob): Promise<void> {
-    this.progress.completePart(downloadJob);
+    this.progress.setComplete(downloadJob);
 
     // debug(
     //   "completed partial download for %s in range %s",
@@ -363,7 +360,7 @@ class DownloadClient {
     //   downloadJob.range.toString()
     // );
 
-    await this.controller.completePart(downloadJob.n, downloadJob);
+    await this.controller.setComplete(downloadJob.n, downloadJob);
     const error = await this.socket.emitWithAck(
       "download:complete",
       downloadJob

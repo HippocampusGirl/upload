@@ -21,7 +21,12 @@ import { uploadPayloadSchema } from "../utils/payload.js";
 import { Progress } from "../utils/progress.js";
 import { signal } from "../utils/signal.js";
 import { endpointSchema, makeClient } from "./socket-client.js";
-import { generateUploadRequests, RangeOptions, UploadJob, UploadRequest } from "./upload-parts.js";
+import {
+  generateUploadRequests,
+  RangeOptions,
+  UploadJob,
+  UploadRequest,
+} from "./upload-parts.js";
 import { WorkerPool } from "./worker.js";
 
 interface CompletedUploadJob extends UploadJob {}
@@ -251,7 +256,7 @@ export class UploadClient {
   async finalizeUploadJob(
     uploadJob: CompletedUploadJob
   ): Promise<CompletedUploadJob> {
-    this.progress.completePart(uploadJob);
+    this.progress.setComplete(uploadJob);
 
     let error;
     try {
@@ -324,7 +329,7 @@ export class UploadClient {
         }
         if (error == "upload-exists") {
           this.progress.addPart(uploadRequest);
-          this.progress.completePart(uploadRequest);
+          this.progress.setComplete(uploadRequest);
         } else {
           debug(
             'skipping upload job because "%s" for %s in range %s',
