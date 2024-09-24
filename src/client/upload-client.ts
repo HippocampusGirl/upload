@@ -2,25 +2,26 @@ import { parse } from "bytes";
 import { Command, Option } from "commander";
 import Debug from "debug";
 import fastq, { queueAsPromised } from "fastq";
-import { Request } from "got";
 import Joi from "joi";
-import { FileHandle, open } from "node:fs/promises";
 import { availableParallelism } from "node:os";
 import { relative } from "node:path";
-import { PassThrough } from "node:stream";
-import { pipeline } from "node:stream/promises";
 import { inspect } from "node:util";
 
 import { decode } from "@tsndr/cloudflare-worker-jwt";
 
+import retry from "async-retry";
+import { createReadStream } from "node:fs";
+import { IncomingHttpHeaders } from "node:http";
+import { Transform, TransformCallback } from "node:stream";
+import { Dispatcher, request } from "undici";
 import { UploadCreateError } from "../errors.js";
 import { parseRange } from "../part.js";
 import { _ClientSocket } from "../socket.js";
-import { client, requestOptions } from "../utils/http-client.js";
+import { InvalidResponseError, retryCodes } from "../utils/http-client.js";
 import { uploadPayloadSchema } from "../utils/payload.js";
 import { Progress } from "../utils/progress.js";
 import { signal } from "../utils/signal.js";
-import { endpointSchema, makeClient } from "./socket-client.js";
+import { clientFactory, endpointSchema } from "./socket-client.js";
 import {
   generateUploadRequests,
   RangeOptions,
@@ -105,7 +106,7 @@ export const makeUploadClientCommand = () => {
         throw new Error(`"numUploadRequests" needs to be a number`);
       }
 
-      const socket = makeClient(endpoint, token);
+      const socket = clientFactory(endpoint, token);
       const client = new UploadClient(
         socket,
         basePath,
@@ -114,7 +115,7 @@ export const makeUploadClientCommand = () => {
       );
 
       try {
-        const uploadPromise = client.submitPaths(paths, {
+        const uploadPromise = client.submit(paths, {
           minPartSize,
           maxPartCount,
         });
@@ -148,11 +149,7 @@ export class UploadClient {
     numUploadRequests: number
   ) {
     this.socket = socket;
-    this.queue = fastq.promise(
-      this,
-      this.runUploadJob,
-      Math.max(numThreads, 1)
-    );
+    this.queue = fastq.promise(this, this.upload, Math.max(numThreads, 1));
     this.numUploadRequests = numUploadRequests;
     this.workerPool = new WorkerPool(numThreads);
     this.basePath = basePath;
@@ -178,135 +175,7 @@ export class UploadClient {
     return relativePath;
   }
 
-  async retryUploadJob(
-    writeStream: Request,
-    uploadJob: UploadJob
-  ): Promise<void> {
-    const { progress } = this;
-    const { path, range, checksumMD5 } = uploadJob;
-    let fileHandle: FileHandle | undefined;
-    try {
-      fileHandle = await open(path);
-      const readStream = fileHandle.createReadStream({
-        ...range,
-      });
-      await pipeline(
-        readStream,
-        async function* (source: AsyncIterable<Buffer>) {
-          for await (const chunk of source) {
-            // debug("read chunk of %o of size %o", path, chunk.length);
-            progress.pulse();
-            yield chunk;
-          }
-        },
-        writeStream,
-        new PassThrough()
-      );
-    } finally {
-      await fileHandle?.close();
-    }
-    const etag = JSON.parse(writeStream.response?.headers.etag ?? "");
-    if (typeof etag !== "string") {
-      throw new Error(
-        `Received invalid response from server: "etag" needs to be a string`
-      );
-    }
-    if (etag !== checksumMD5) {
-      throw new Error(
-        `Received invalid response from server: "etag" does not match MD5 checksum`
-      );
-    }
-  }
-
-  async runUploadJob(uploadJob: UploadJob): Promise<CompletedUploadJob> {
-    return new Promise(
-      (resolve: (value: Promise<CompletedUploadJob>) => void) => {
-        const upload = async (retryStream: Request) => {
-          retryStream.once(
-            "retry",
-            (retryCount: number, error, createRetryStream: () => Request) => {
-              debug(
-                "upload job failed on attempt %d with error %o",
-                retryCount,
-                error.message
-              );
-              upload(createRetryStream());
-            }
-          );
-          try {
-            await this.retryUploadJob(retryStream, uploadJob);
-            resolve(this.finalizeUploadJob(uploadJob));
-          } catch {
-            // We do not care about this error, as `got` will retry the request
-          }
-        };
-        const { url, range } = uploadJob;
-        const writeStream: Request = client.stream.put(url, {
-          headers: {
-            "Content-Type": "application/octet-stream",
-            "Content-Length": `${range.size()}`,
-          },
-          ...requestOptions,
-        });
-        upload(writeStream);
-      }
-    );
-  }
-
-  async finalizeUploadJob(
-    uploadJob: CompletedUploadJob
-  ): Promise<CompletedUploadJob> {
-    this.progress.setComplete(uploadJob);
-
-    let error;
-    try {
-      uploadJob.path = this.getRelativePath(uploadJob.path);
-      error = await this.socket.emitWithAck("upload:complete", uploadJob);
-      if (error) {
-        debug(
-          "error occurred while finalizing upload job %o: %O",
-          uploadJob,
-          error
-        );
-      }
-    } catch (error) {
-      debug("error sending complete %o", error);
-    }
-    // debug(
-    //   "completed partial upload for %s in range %s",
-    //   uploadJob.path,
-    //   uploadJob.range.toString()
-    // );
-    return uploadJob;
-  }
-
-  async submitChecksum(path: string): Promise<void> {
-    const checksumSHA256 = await this.workerPool.submitCalculateChecksum(
-      path,
-      "sha256"
-    );
-    const relativePath = this.getRelativePath(path);
-    let error;
-    try {
-      error = await this.socket.emitWithAck(
-        "upload:checksum",
-        relativePath,
-        checksumSHA256
-      );
-      if (error) {
-        debug(
-          "error submitting checksum job %o: %O",
-          [path, checksumSHA256],
-          error
-        );
-        // continue;
-      }
-    } catch (error) {
-      debug("error sending checksum %o", error);
-    }
-  }
-
-  async createUploadJobs(
+  async create(
     path: string,
     uploadRequests: UploadRequest[]
   ): Promise<unknown> {
@@ -349,8 +218,7 @@ export class UploadClient {
 
     return Promise.all(promises);
   }
-
-  async submitPaths(paths: string[], options: RangeOptions): Promise<unknown> {
+  async submit(paths: string[], options: RangeOptions): Promise<unknown> {
     const jobs = paths.map(async (path): Promise<void> => {
       const relativePath = this.getRelativePath(path);
 
@@ -365,13 +233,13 @@ export class UploadClient {
         uploadRequest.path = relativePath;
         uploadRequests.push(uploadRequest);
         if (uploadRequests.length >= 10) {
-          promises.push(this.createUploadJobs(path, uploadRequests));
+          promises.push(this.create(path, uploadRequests));
           uploadRequests = [];
         }
       }
 
-      promises.push(this.createUploadJobs(path, uploadRequests));
-      promises.push(this.submitChecksum(path));
+      promises.push(this.create(path, uploadRequests));
+      promises.push(this.checksum(path));
       await Promise.all(promises);
 
       debug("completed upload for %o", path);
@@ -379,5 +247,108 @@ export class UploadClient {
 
     // debug("waiting for %d jobs", jobs.length);
     return Promise.all(jobs);
+  }
+  async upload(job: UploadJob): Promise<CompletedUploadJob> {
+    const { progress } = this;
+
+    const { url, path, range, checksumMD5 } = job;
+
+    const headers: IncomingHttpHeaders = {
+      "Content-Type": "application/octet-stream",
+      "Content-Length": `${range.size()}`,
+    };
+    const body = createReadStream(path, {
+      ...range,
+    }).pipe(
+      new Transform({
+        transform(chunk: any, _, callback: TransformCallback) {
+          progress.pulse();
+          callback(null, chunk);
+        },
+      })
+    );
+    const data = await retry(
+      async (
+        bail: (e: Error) => void
+      ): Promise<Dispatcher.ResponseData | void> => {
+        try {
+          return await request(url, { method: "PUT", headers, body });
+        } catch (error: unknown) {
+          if (error instanceof InvalidResponseError) {
+            return bail(error);
+          } else if (error instanceof Error) {
+            throw error;
+          } else {
+            throw new Error(`Upload failed: ${error}`);
+          }
+        }
+      }
+    );
+    if (data === undefined) {
+      throw new Error("Upload failed");
+    }
+
+    const { statusCode } = data;
+
+    if (statusCode !== 200) {
+      const message = `Received status code ${statusCode} from server`;
+      if (statusCode in retryCodes) {
+        throw new Error(message);
+      } else {
+        throw new InvalidResponseError(message);
+      }
+    }
+
+    return await this.finalize(job);
+  }
+  async finalize(uploadJob: CompletedUploadJob): Promise<CompletedUploadJob> {
+    this.progress.setComplete(uploadJob);
+
+    let error;
+    try {
+      uploadJob.path = this.getRelativePath(uploadJob.path);
+      error = await this.socket.emitWithAck("upload:complete", uploadJob);
+      if (error) {
+        debug(
+          "error occurred while finalizing upload job %o: %O",
+          uploadJob,
+          error
+        );
+      }
+    } catch (error) {
+      debug("error sending complete %o", error);
+    }
+    // debug(
+    //   "completed partial upload for %s in range %s",
+    //   uploadJob.path,
+    //   uploadJob.range.toString()
+    // );
+    return uploadJob;
+  }
+
+  async checksum(path: string): Promise<void> {
+    const checksumSHA256 = await this.workerPool.submitCalculateChecksum(
+      path,
+      "sha256"
+    );
+    const relativePath = this.getRelativePath(path);
+    let error;
+    try {
+      error = await this.socket.emitWithAck(
+        "upload:checksum",
+        relativePath,
+        checksumSHA256
+      );
+      if (error) {
+        debug(
+          "error submitting checksum job %o: %O",
+          [path, checksumSHA256],
+          error
+        );
+        // continue;
+      }
+    } catch (error) {
+      debug("error sending checksum %o", error);
+    }
   }
 }

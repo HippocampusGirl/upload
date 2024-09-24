@@ -1,9 +1,9 @@
 import Joi, { ObjectSchema } from "joi";
 
-import { client, requestOptions } from "../../utils/http-client.js";
+import { IncomingHttpHeaders } from "node:http";
+import undici from "undici";
 import { AuthorizeAccountResponse } from "./authorize-account.js";
 
-import type { OptionsOfJSONResponseBodyWrapped } from "got";
 interface ListBucketsRequest {
   accountId: string;
   bucketName: string;
@@ -30,21 +30,12 @@ const listBucket = async (
   const { apiInfo, authorizationToken, accountId } = authorizeAccountResponse;
   const apiUrl = apiInfo.storageApi.apiUrl;
   const url = new URL("b2api/v3/b2_list_buckets", apiUrl);
+  const headers: IncomingHttpHeaders = { Authorization: authorizationToken };
   const json: ListBucketsRequest = { accountId, bucketName };
-  const options: OptionsOfJSONResponseBodyWrapped = {
-    ...requestOptions,
-    url,
-    json,
-    headers: {
-      Authorization: authorizationToken,
-    },
-    isStream: false,
-    resolveBodyOnly: false,
-    responseType: "json",
-  };
-  const response = await client.post(options);
+  const body = JSON.stringify(json);
+  const data = await undici.request(url, { method: "POST", headers, body });
   const listBucketsResponse = Joi.attempt(
-    response.body,
+    await data.body.json(),
     listBucketsResponseSchema
   );
   return listBucketsResponse;

@@ -1,31 +1,32 @@
+import { decode } from "@tsndr/cloudflare-worker-jwt";
 import { Command, Option } from "commander";
 import Debug from "debug";
 import fastq, { queueAsPromised } from "fastq";
 import Joi from "joi";
-import { createHash } from "node:crypto";
-import { access, constants, FileHandle, mkdir, open } from "node:fs/promises";
-import { dirname } from "node:path";
-import { pipeline } from "node:stream/promises";
+import { access, constants } from "node:fs/promises";
 import { join } from "path";
+import { Dispatcher, stream } from "undici";
 
-import { decode } from "@tsndr/cloudflare-worker-jwt";
-
+import retry from "async-retry";
+import { createHash } from "node:crypto";
+import { createWriteStream } from "node:fs";
+import { IncomingHttpHeaders } from "node:http";
+import { Transform, TransformCallback, Writable } from "node:stream";
 import { Controller } from "../controller.js";
 import { ChecksumJob, DownloadFile, DownloadJob } from "../download-schema.js";
 import { getDataSource } from "../entity/data-source.js";
 import { File } from "../entity/file.js";
 import { parseRange } from "../part.js";
 import { _ClientSocket } from "../socket.js";
-import { touch } from "../utils/fs.js";
-import { client, requestOptions } from "../utils/http-client.js";
+import { InvalidResponseError, retryCodes } from "../utils/http-client.js";
 import { downloadPayloadSchema } from "../utils/payload.js";
 import { Progress } from "../utils/progress.js";
 import { Range, reduceRanges } from "../utils/range.js";
 import { signal } from "../utils/signal.js";
-import { endpointSchema, makeClient } from "./socket-client.js";
+import { touch } from "./fs.js";
+import { clientFactory, endpointSchema } from "./socket-client.js";
 import { WorkerPool } from "./worker.js";
 
-import type { Request } from "got";
 interface CompletedDownloadJob extends DownloadJob {
   size: number;
 }
@@ -153,9 +154,9 @@ class DownloadClient {
   ) {
     this.endpoint = endpoint;
     this.token = token;
-    this.socket = makeClient(endpoint, token);
+    this.socket = clientFactory(endpoint, token);
     this.basePath = basePath;
-    this.queue = fastq.promise(this, this.runDownloadJob, numThreads);
+    this.queue = fastq.promise(this, this.download, numThreads);
     this.controller = controller;
     this.workerPool = new WorkerPool(numThreads);
   }
@@ -177,11 +178,11 @@ class DownloadClient {
 
           const run = await this.controller.addPart(downloadJob.n, downloadJob);
           if (!run) {
-            // debug(
-            //   "not adding download job for %s in range %s because it already exists",
-            //   downloadJob.path,
-            //   downloadJob.range.toString()
-            // );
+            debug(
+              "not adding download job for %s in range %s because it already exists",
+              downloadJob.path,
+              downloadJob.range.toString()
+            );
             await this.socket.emitWithAck("download:complete", downloadJob);
             continue;
           }
@@ -196,6 +197,8 @@ class DownloadClient {
             continue;
           }
           this.downloads.add(key);
+
+          // debug("added download job %o", downloadJob);
 
           this.progress.addPart(downloadJob);
           promises.push(this.queue.push(downloadJob));
@@ -229,74 +232,6 @@ class DownloadClient {
     }
     const path = join(...paths);
     return path;
-  }
-
-  async retryDownloadJob(
-    readStream: Request,
-    downloadJob: DownloadJob
-  ): Promise<CompletedDownloadJob> {
-    const { progress } = this;
-    const { start, end } = downloadJob.range;
-
-    const path = this.makePath(downloadJob);
-    await mkdir(dirname(path), { recursive: true });
-    await touch(path);
-
-    // debug("downloading %s to %s", downloadJob.url, path);
-
-    let fileHandle: FileHandle | undefined;
-    const md5 = createHash("md5");
-    let size = 0;
-    try {
-      fileHandle = await open(path, "r+");
-      const writeStream = fileHandle.createWriteStream({ start });
-      await pipeline(
-        readStream,
-        async function* (source: AsyncIterable<Buffer>) {
-          for await (const chunk of source) {
-            md5.update(chunk as unknown as Uint8Array);
-            size += chunk.length;
-
-            progress.pulse();
-
-            yield chunk;
-          }
-        },
-        writeStream
-      );
-      writeStream.end();
-    } finally {
-      await fileHandle?.close();
-    }
-    if (end !== undefined) {
-      if (size !== new Range(start, end).size()) {
-        throw new Error(
-          `Received invalid response from server: Content length does not match suffix`
-        );
-      }
-    }
-    const etag = JSON.parse(readStream.response?.headers.etag ?? "");
-    if (typeof etag !== "string") {
-      throw new Error(
-        `Received invalid response from server: "etag" needs to be a string`
-      );
-    }
-    if (etag !== md5.digest("hex")) {
-      throw new Error(
-        "Received invalid response from server: " +
-          '"etag" does not match MD5 checksum calculated from response body'
-      );
-    }
-    if (downloadJob.checksumMD5 !== etag) {
-      throw new Error(
-        "Received invalid response from server: " +
-          '"etag" does not match MD5 checksum received from server'
-      );
-    }
-    return {
-      ...downloadJob,
-      size,
-    };
   }
 
   async verify(job: DownloadFile): Promise<void> {
@@ -351,16 +286,41 @@ class DownloadClient {
 
     await this.socket.emitWithAck("download:verified", job);
   }
-  async finalizeDownloadJob(downloadJob: CompletedDownloadJob): Promise<void> {
+
+  async download(job: DownloadJob): Promise<void> {
+    const { progress } = this;
+
+    const { url, range, checksumMD5 } = job;
+
+    const path = this.makePath(job);
+    await touch(path);
+
+    const headers: IncomingHttpHeaders = {};
+    if (url.startsWith(this.endpoint)) {
+      headers["Authorization"] = this.token;
+    }
+    const opaque: Opaque = { path, range, progress, checksumMD5 };
+
+    await retry(async (bail: (e: Error) => void) => {
+      try {
+        await stream(url, { method: "GET", headers, opaque }, factory);
+      } catch (error: unknown) {
+        // debug("retrying download because of error: %O", error);
+        if (error instanceof InvalidResponseError) {
+          bail(error);
+        } else if (error instanceof Error) {
+          throw error;
+        } else {
+          throw new Error(`Download failed: ${error}`);
+        }
+      }
+    });
+    await this.finalize(job);
+  }
+  async finalize(downloadJob: CompletedDownloadJob): Promise<void> {
     this.progress.setComplete(downloadJob);
-
-    // debug(
-    //   "completed partial download for %s in range %s",
-    //   downloadJob.path,
-    //   downloadJob.range.toString()
-    // );
-
     await this.controller.setComplete(downloadJob.n, downloadJob);
+
     const error = await this.socket.emitWithAck(
       "download:complete",
       downloadJob
@@ -375,47 +335,78 @@ class DownloadClient {
     const { n, path } = downloadJob;
     await this.verify({ n, path });
   }
-
-  async runDownloadJob(downloadJob: DownloadJob): Promise<void> {
-    return new Promise((resolve: (value: Promise<void>) => void) => {
-      const download = async (retryStream: Request) => {
-        retryStream.once(
-          "retry",
-          (retryCount: number, error, createRetryStream: () => Request) => {
-            debug(
-              "download job failed on attempt %d with error %o",
-              retryCount,
-              error.message
-            );
-            download(createRetryStream());
-          }
-        );
-        try {
-          await this.retryDownloadJob(retryStream, downloadJob);
-          resolve(this.finalizeDownloadJob(downloadJob));
-        } catch {
-          // We do not care about this error, as `got` will retry the request
-        }
-      };
-
-      const { url } = downloadJob;
-
-      const options = { ...requestOptions };
-      if (url.startsWith(this.endpoint)) {
-        options.headers = {
-          Authorization: this.token,
-        };
-      }
-
-      let readStream: Request;
-      try {
-        readStream = client.stream.get(url, options);
-      } catch (error) {
-        debug(error);
-        return;
-      }
-
-      download(readStream);
-    });
-  }
 }
+
+interface Opaque {
+  progress: Progress;
+  path: string;
+  range: Range;
+  checksumMD5: string;
+}
+
+const factory = (data: Dispatcher.StreamFactoryData): Writable => {
+  const { statusCode } = data;
+
+  if (statusCode !== 200) {
+    const message = `Received status code ${statusCode} from server`;
+    if (statusCode in retryCodes) {
+      throw new Error(message);
+    } else {
+      throw new InvalidResponseError(message);
+    }
+  }
+
+  const {
+    path,
+    range: { start, end },
+    checksumMD5,
+    progress,
+  } = data.opaque as Opaque;
+
+  const md5 = createHash("md5");
+  let size = 0;
+  const transform = new Transform({
+    transform(chunk: any, _, callback: TransformCallback) {
+      md5.update(chunk);
+      size += chunk.length;
+      progress.pulse();
+      callback(null, chunk);
+    },
+  });
+
+  const write = createWriteStream(path, { flags: "r+", start });
+  transform.pipe(write);
+
+  write.on("finish", (): void => {
+    if (end !== undefined) {
+      const expected = new Range(start, end).size();
+      if (size !== expected) {
+        throw new InvalidResponseError(
+          `Content length does not match suffix: ${size} != ${expected}`
+        );
+      }
+    }
+    const etagHeader = data.headers["etag"];
+    if (etagHeader === undefined) {
+      throw new InvalidResponseError('Missing "etag" header');
+    } else if (typeof etagHeader !== "string") {
+      throw new InvalidResponseError('"etag" header needs to be a string');
+    }
+    const etag = JSON.parse(etagHeader); // remove quotes
+    if (typeof etag !== "string") {
+      throw new InvalidResponseError('"etag" needs to be a string');
+    }
+    if (etag !== md5.digest("hex")) {
+      throw new InvalidResponseError(
+        '"etag" does not match MD5 checksum calculated from response body'
+      );
+    }
+    if (checksumMD5 !== etag) {
+      throw new InvalidResponseError(
+        '"etag" does not match MD5 checksum received from server'
+      );
+    }
+  });
+
+  return transform;
+};

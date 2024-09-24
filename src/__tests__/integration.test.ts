@@ -16,10 +16,10 @@ import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import { decode, verify } from "@tsndr/cloudflare-worker-jwt";
 
 import { downloadClient } from "../client/download-client.js";
+import { calculateChecksum } from "../client/fs.js";
 import { DatabaseType } from "../entity/data-source.js";
 import { command } from "../index.js";
 import { server } from "../server/serve.js";
-import { calculateChecksum } from "../utils/fs.js";
 
 const debug = Debug("test");
 

@@ -1,8 +1,6 @@
 import Joi, { ObjectSchema } from "joi";
-
-import { client, requestOptions } from "../../utils/http-client.js";
-
-import type { OptionsOfJSONResponseBodyWrapped } from "got";
+import { IncomingHttpHeaders } from "node:http";
+import undici from "undici";
 
 interface StorageApi {
   apiUrl: string;
@@ -36,19 +34,13 @@ export const authorizeAccount = async (
   ApplicationKey: string
 ): Promise<AuthorizeAccountResponse> => {
   const url = new URL("b2api/v3/b2_authorize_account", apiUrl);
-  const options: OptionsOfJSONResponseBodyWrapped = {
-    ...requestOptions,
-    url,
-    headers: {
-      Authorization: `Basic ${btoa(applicationKeyId + ":" + ApplicationKey)}`,
-    },
-    isStream: false,
-    resolveBodyOnly: false,
-    responseType: "json",
+
+  const headers: IncomingHttpHeaders = {
+    Authorization: `Basic ${btoa(applicationKeyId + ":" + ApplicationKey)}`,
   };
-  const response = await client.get(options);
+  const response = await undici.request(url, { method: "GET", headers });
   const authorizeAccountResponse = Joi.attempt(
-    response.body,
+    await response.body.json(),
     authorizeAccountResponseSchema
   );
   return authorizeAccountResponse;

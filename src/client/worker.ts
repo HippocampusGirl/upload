@@ -7,9 +7,9 @@ import { fileURLToPath } from "node:url";
 import { parentPort, Worker } from "node:worker_threads";
 
 import { parseRange } from "../part.js";
-import { calculateChecksum } from "../utils/fs.js";
 import { tsNodeArgv } from "../utils/loader.js";
 import { Range } from "../utils/range.js";
+import { calculateChecksum } from "./fs.js";
 
 const debug = Debug("client");
 

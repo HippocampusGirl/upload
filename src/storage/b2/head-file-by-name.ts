@@ -1,9 +1,9 @@
 import Joi, { ObjectSchema } from "joi";
 
-import { client, requestOptions } from "../../utils/http-client.js";
+import { IncomingHttpHeaders } from "node:http";
+import undici from "undici";
 import { AuthorizeAccountResponse } from "./authorize-account.js";
 
-import type { OptionsOfUnknownResponseBodyWrapped } from "got";
 export interface FileVersion {
   fileName: string;
   fileId: string;
@@ -36,27 +36,22 @@ export const headFileByName = async (
   const { apiInfo, authorizationToken } = authorizeAccountResponse;
   const apiUrl = apiInfo.storageApi.apiUrl;
   const url = new URL(`/file/${bucketName}/${fileName}`, apiUrl);
-  const options: OptionsOfUnknownResponseBodyWrapped = {
-    ...requestOptions,
-    url,
-    headers: {
-      Authorization: authorizationToken,
-    },
-    isStream: false,
-    resolveBodyOnly: false,
-  };
-  const response = await client.head(options);
-  if (response.statusCode === 404) {
+  const headers: IncomingHttpHeaders = { Authorization: authorizationToken };
+  const data = await undici.request(url, { method: "HEAD", headers });
+
+  const { statusCode } = data;
+  if (statusCode === 404) {
     return null;
   }
-  const headfileName = response.headers["x-bz-file-name"];
+
+  const headfileName = data.headers["x-bz-file-name"];
   if (headfileName !== fileName) {
     throw new Error(
       `Expected file name ${fileName} but received ${headfileName}`
     );
   }
-  const fileId = response.headers["x-bz-file-id"];
-  const checksumSHA1 = response.headers["x-bz-content-sha1"];
+  const fileId = data.headers["x-bz-file-id"];
+  const checksumSHA1 = data.headers["x-bz-content-sha1"];
   const headFileByNameResponse = Joi.attempt(
     {
       fileName,

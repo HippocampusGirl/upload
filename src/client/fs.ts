@@ -3,12 +3,12 @@ import {
   CreateReadStreamOptions,
   FileHandle,
   mkdir,
-  open
+  open,
 } from "node:fs/promises";
-import { parse } from "node:path";
+import { dirname } from "node:path";
 import { pipeline } from "node:stream/promises";
 
-import { Range } from "./range.js";
+import { Range } from "../utils/range.js";
 
 export const calculateChecksum = async (
   path: string,
@@ -37,8 +37,7 @@ export const calculateChecksum = async (
 
 export const touch = async (path: string): Promise<void> => {
   // Create directory if it does not exist
-  const { dir } = parse(path);
-  await mkdir(dir, { recursive: true });
+  await mkdir(dirname(path), { recursive: true });
 
   // Create empty file if it does not exist
   let fileHandle;

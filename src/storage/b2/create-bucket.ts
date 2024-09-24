@@ -1,7 +1,7 @@
-import { OptionsOfJSONResponseBodyWrapped } from "got";
 import Joi, { ObjectSchema } from "joi";
 
-import { client, requestOptions } from "../../utils/http-client.js";
+import { IncomingHttpHeaders } from "node:http";
+import undici from "undici";
 import { AuthorizeAccountResponse } from "./authorize-account.js";
 
 interface LifecycleRule {
@@ -53,6 +53,7 @@ export const createBucket = async (
   const { apiInfo, authorizationToken, accountId } = authorizeAccountResponse;
   const apiUrl = apiInfo.storageApi.apiUrl;
   const url = new URL("b2api/v3/b2_create_bucket", apiUrl);
+  const headers: IncomingHttpHeaders = { Authorization: authorizationToken };
   const json: CreateBucketRequest = {
     accountId,
     bucketName,
@@ -64,20 +65,10 @@ export const createBucket = async (
     replicationConfiguration: {},
     defaultServerSideEncryption,
   };
-  const options: OptionsOfJSONResponseBodyWrapped = {
-    ...requestOptions,
-    url,
-    json,
-    headers: {
-      Authorization: authorizationToken,
-    },
-    isStream: false,
-    resolveBodyOnly: false,
-    responseType: "json",
-  };
-  const response = await client.post(options);
+  const body = JSON.stringify(json);
+  const data = await undici.request(url, { method: "POST", headers, body });
   const createBucketResponse = Joi.attempt(
-    response.body,
+    await data.body.json(),
     createBucketResponseSchema
   );
   return createBucketResponse;

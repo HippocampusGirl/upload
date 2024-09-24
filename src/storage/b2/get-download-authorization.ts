@@ -1,10 +1,10 @@
 import Joi, { ObjectSchema } from "joi";
 
-import { client, requestOptions } from "../../utils/http-client.js";
+import { IncomingHttpHeaders } from "node:http";
+import undici from "undici";
 import { expiresIn } from "../ttl.js";
 import { AuthorizeAccountResponse } from "./authorize-account.js";
 
-import type { OptionsOfJSONResponseBodyWrapped } from "got";
 interface GetDownloadAuthorizationRequest {
   bucketId: string;
   fileNamePrefix: string;
@@ -25,25 +25,16 @@ export const getDownloadAuthorizationToken = async (
   const { apiInfo, authorizationToken } = authorizeAccountResponse;
   const apiUrl = apiInfo.storageApi.apiUrl;
   const url = new URL("b2api/v3/b2_get_download_authorization", apiUrl);
+  const headers: IncomingHttpHeaders = { Authorization: authorizationToken };
   const json: GetDownloadAuthorizationRequest = {
     bucketId,
     fileNamePrefix,
     validDurationInSeconds: expiresIn,
   };
-  const options: OptionsOfJSONResponseBodyWrapped = {
-    ...requestOptions,
-    url,
-    json,
-    headers: {
-      Authorization: authorizationToken,
-    },
-    isStream: false,
-    resolveBodyOnly: false,
-    responseType: "json",
-  };
-  const response = await client.post(options);
+  const body = JSON.stringify(json);
+  const data = await undici.request(url, { method: "POST", headers, body });
   const getDownloadAuthorizationResponse = Joi.attempt(
-    response.body,
+    await data.body.json(),
     getDownloadAuthorizationResponseSchema
   );
   return getDownloadAuthorizationResponse.authorizationToken;

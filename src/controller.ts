@@ -1,3 +1,4 @@
+import retry from "async-retry";
 import Debug from "debug";
 import fastq, { queueAsPromised } from "fastq";
 import {
@@ -8,8 +9,8 @@ import {
   IsNull,
   Not,
   ObjectLiteral,
+  QueryFailedError,
 } from "typeorm";
-
 import { File } from "./entity/file.js";
 import { Part } from "./entity/part.js";
 import { StorageProvider } from "./entity/storage-provider.js";
@@ -64,10 +65,29 @@ export class Controller {
   ): Promise<T> {
     return this.queue.push(callback) as T;
   }
-  async runTransaction(
-    callback: (manager: EntityManager) => Promise<unknown>
-  ): Promise<unknown> {
-    return this.dataSource.transaction("SERIALIZABLE", callback);
+  async runTransaction<T>(
+    callback: (manager: EntityManager) => Promise<T>
+  ): Promise<T> {
+    const r = await retry(
+      async (bail: (e: Error) => void): Promise<T | void> => {
+        try {
+          return await this.dataSource.transaction("SERIALIZABLE", callback);
+        } catch (error: unknown) {
+          if (
+            error instanceof QueryFailedError &&
+            error.message ===
+              "could not serialize access due to concurrent update"
+          ) {
+            throw error;
+          } else if (error instanceof Error) {
+            return bail(error);
+          } else {
+            return bail(new Error(`Transaction failed with error: ${error}`));
+          }
+        }
+      }
+    );
+    return r!;
   }
 
   // File

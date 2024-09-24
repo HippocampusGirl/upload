@@ -4,9 +4,9 @@ import "reflect-metadata";
 
 import { Command } from "commander";
 import Debug from "debug";
-import esMain from "es-main";
 import { isMainThread } from "node:worker_threads";
 
+import esMain from "es-main";
 import { makeAddStorageProviderCommand } from "./cli/add-storage-provider.js";
 import { makeCreateTokenCommand } from "./cli/create-token.js";
 import { makeSynchronizeCommand } from "./cli/synchronize.js";
