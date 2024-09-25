@@ -175,7 +175,6 @@ export class DownloadServer {
     let fileIdsForChecksumJobs: Set<number> = new Set();
     let downloadJobs: DownloadJob[] = [];
 
-    let chunkSize: number = 16;
     for await (const object of storage.listObjects()) {
       if (!this.isLooping) {
         return fileIdsForChecksumJobs;
@@ -252,10 +251,10 @@ export class DownloadServer {
         debug("could not parse object %o: %O", object, error);
       }
 
-      if (downloadJobs.length >= chunkSize) {
+      if (downloadJobs.length >= 10) {
+        // chunk size
         await this.sendDownloadJobs(downloadJobs);
         downloadJobs = [];
-        chunkSize *= 2;
       }
     }
 

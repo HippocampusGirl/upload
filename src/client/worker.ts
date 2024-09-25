@@ -20,7 +20,7 @@ import { tsNodeArgv } from "../utils/loader.js";
 import { Range } from "../utils/range.js";
 import { calculateChecksum } from "./fs.js";
 
-const debug = Debug("client");
+const debug = Debug("worker");
 
 interface ChecksumInput {
   type: "checksum";
@@ -144,7 +144,7 @@ export class WorkerPool extends EventEmitter {
   }
   private runTask<T>(task: Task<T>) {
     if (this.freeWorkers.length === 0) {
-      // debug("no free workers, waiting for a worker to become free");
+      debug("no free workers, waiting for a worker to become free");
       this.tasks.push(task);
       return;
     }
@@ -192,7 +192,7 @@ export const worker = (): void => {
         });
         await factory(data);
       } catch (error: unknown) {
-        // debug("retrying download because of error: %O", error);
+        debug("retrying download because of error: %O", error);
         if (error instanceof InvalidResponseError) {
           bail(error);
         } else if (error instanceof Error) {
@@ -228,7 +228,7 @@ export const worker = (): void => {
       throw new Error("Invalid parentPort");
     }
 
-    // debug("running %s task", input.type);
+    debug("running %s task: %O", input.type, input);
 
     switch (input.type) {
       case "checksum":
