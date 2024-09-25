@@ -7,6 +7,7 @@ import Debug from "debug";
 import { isMainThread } from "node:worker_threads";
 
 import esMain from "es-main";
+import { EnvHttpProxyAgent, setGlobalDispatcher } from "undici";
 import { makeAddStorageProviderCommand } from "./cli/add-storage-provider.js";
 import { makeCreateTokenCommand } from "./cli/create-token.js";
 import { makeSynchronizeCommand } from "./cli/synchronize.js";
@@ -15,6 +16,8 @@ import { makeUploadClientCommand } from "./client/upload-client.js";
 import { worker } from "./client/worker.js";
 import { makeServeCommand } from "./server/serve.js";
 import { name, version } from "./utils/metadata.js";
+
+setGlobalDispatcher(new EnvHttpProxyAgent({ pipelining: 10, allowH2: true }));
 
 export const command = new Command();
 command

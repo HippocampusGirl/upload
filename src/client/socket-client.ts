@@ -6,7 +6,6 @@ import msgpackParser from "socket.io-msgpack-parser";
 
 import { _ClientSocket } from "../socket.js";
 import { version } from "../utils/metadata.js";
-
 const debug = Debug("client");
 
 export const endpointSchema = Joi.string().uri({
@@ -34,7 +33,7 @@ export const clientFactory = (
   const socket = io(endpoint, options);
 
   socket.on("connect_error", (error) => {
-    debug("failed to connect to server: %o", error.message);
+    debug("failed to connect to server: %O", error);
   });
 
   return socket;

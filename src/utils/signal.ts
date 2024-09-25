@@ -8,6 +8,8 @@ export const signal = new Promise<void>((resolve) => {
     debug("received SIGINT");
     resolve();
   };
+  process.once("SIGINT", checkSIGINT);
+
   const checkWorkers = () => {
     if (
       cluster.workers !== undefined &&
@@ -17,8 +19,7 @@ export const signal = new Promise<void>((resolve) => {
       resolve();
     }
   };
-  process.on("SIGINT", checkSIGINT);
   if (cluster.isPrimary) {
-    cluster.on("disconnect", checkWorkers);
+    cluster.once("disconnect", checkWorkers);
   }
 });

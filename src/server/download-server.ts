@@ -21,7 +21,7 @@ export class DownloadServer {
   interval: number;
 
   downloads: Set<string> = new Set();
-  checksums: Set<string> = new Set();
+  checksums: Set<number> = new Set();
 
   constructor(io: _Server, interval: number) {
     this.io = io;
@@ -139,6 +139,8 @@ export class DownloadServer {
 
     let fileIdsForChecksumJobs: Set<number> = new Set();
     let downloadJobs: DownloadJob[] = [];
+
+    let chunkSize: number = 16;
     for await (const object of storage.listObjects()) {
       try {
         if (object.Bucket === undefined) {
@@ -192,7 +194,6 @@ export class DownloadServer {
           await storage.deleteFile(object.Bucket, object.Key);
           continue;
         }
-        fileIdsForChecksumJobs.add(file.id);
 
         const key = [
           storageProvider.id,
@@ -207,14 +208,16 @@ export class DownloadServer {
         }
         this.downloads.add(key);
 
+        fileIdsForChecksumJobs.add(file.id);
         downloadJobs.push(await this.createDownloadJob(storage, object, part));
       } catch (error) {
         debug("could not parse object %o: %O", object, error);
       }
 
-      if (downloadJobs.length >= 10) {
+      if (downloadJobs.length >= chunkSize) {
         this.sendDownloadJobs(downloadJobs);
         downloadJobs = [];
+        chunkSize *= 2;
       }
     }
 
@@ -235,7 +238,7 @@ export class DownloadServer {
 
   private sendDownloadJobs(downloadJobs: DownloadJob[]): void {
     const io = this.io;
-    debug("sending %o download jobs", downloadJobs.length);
+    // debug("sending %o download jobs", downloadJobs.length);
     io.to("download").emit("download:create", downloadJobs);
   }
 

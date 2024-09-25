@@ -327,10 +327,10 @@ export class UploadClient {
   }
 
   async checksum(path: string): Promise<void> {
-    const checksumSHA256 = await this.workerPool.submitCalculateChecksum(
+    const checksumSHA256 = await this.workerPool.checksum({
       path,
-      "sha256"
-    );
+      algorithm: "sha256",
+    });
     const relativePath = this.getRelativePath(path);
     let error;
     try {

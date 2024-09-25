@@ -39,11 +39,11 @@ export async function* generateUploadRequests(
     end = (end > size ? size : end) - 1;
 
     const range = new Range(start, end);
-    const checksumMD5 = await workerPool.submitCalculateChecksum(
+    const checksumMD5 = await workerPool.checksum({
       path,
-      "md5",
-      range
-    );
+      algorithm: "md5",
+      range,
+    });
 
     yield { path, size, range, checksumMD5 };
   }
