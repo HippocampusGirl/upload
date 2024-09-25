@@ -60,7 +60,7 @@ export class DownloadServer {
           );
           callback({ error: "unknown" });
         }
-        // debug("download complete %o", downloadJob);
+        debug("download complete %o", downloadJob);
         callback(undefined);
       }
     );
@@ -175,6 +175,7 @@ export class DownloadServer {
     let fileIdsForChecksumJobs: Set<number> = new Set();
     let downloadJobs: DownloadJob[] = [];
 
+    let chunkSize: number = 16;
     for await (const object of storage.listObjects()) {
       if (!this.isLooping) {
         return fileIdsForChecksumJobs;
@@ -251,10 +252,10 @@ export class DownloadServer {
         debug("could not parse object %o: %O", object, error);
       }
 
-      if (downloadJobs.length >= 10) {
-        // chunk size
+      if (downloadJobs.length >= chunkSize) {
         await this.sendDownloadJobs(downloadJobs);
         downloadJobs = [];
+        chunkSize *= 2;
       }
     }
 

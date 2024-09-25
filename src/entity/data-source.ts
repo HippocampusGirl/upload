@@ -13,13 +13,14 @@ export type DatabaseType = "sqlite" | "postgres";
 export const getDataSource = async (
   type: DatabaseType,
   connectionString: string,
-  logging: boolean = false
+  logging: boolean = false,
+  subscribers: Function[] = []
 ): Promise<DataSource> => {
   const config = {
     logging,
     synchronize: false,
     entities: [File, Part, StorageProvider],
-    subscribers: [],
+    subscribers,
     migrations: [],
     entitySkipConstructor: true,
     cache: false,
@@ -32,6 +33,7 @@ export const getDataSource = async (
         type: "better-sqlite3",
         driver: betterSqlite3,
         database: connectionString,
+        enableWAL: true,
         logger: "debug",
         ...config,
       }).initialize();

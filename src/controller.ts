@@ -68,6 +68,7 @@ export class Controller {
   async runTransaction<T>(
     callback: (manager: EntityManager) => Promise<T>
   ): Promise<T> {
+    debug("starting transaction");
     const r = await retry(
       async (bail: (e: Error) => void): Promise<T | void> => {
         try {
@@ -82,11 +83,12 @@ export class Controller {
           } else if (error instanceof Error) {
             return bail(error);
           } else {
-            return bail(new Error(`Transaction failed with error: ${error}`));
+            return bail(new Error(`transaction failed with error: ${error}`));
           }
         }
       }
     );
+    debug("finished transaction");
     return r!;
   }
 

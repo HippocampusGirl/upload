@@ -9,6 +9,7 @@ import { getDataSource } from "../entity/data-source.js";
 import { Range } from "../utils/range.js";
 
 const debug = Debug("test");
+
 describe("controller", () => {
   let temporaryDirectory: string;
   let connectionString: string;
@@ -17,6 +18,7 @@ describe("controller", () => {
   beforeAll(async () => {
     temporaryDirectory = await mkdtemp(join(tmpdir(), "upload-"));
     connectionString = join(temporaryDirectory, "database.sqlite");
+
     dataSource = await getDataSource("sqlite", connectionString, true);
     debug("database initialized");
     await dataSource.synchronize();

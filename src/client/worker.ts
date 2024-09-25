@@ -100,6 +100,8 @@ export class WorkerPool extends EventEmitter {
     const extension = extname(workerPath);
     const indexPath = join(dirname(workerPath), `../index${extension}`);
 
+    debug("adding new worker with index %s", indexPath);
+
     const execArgv: string[] = [];
     if (extension === ".ts") {
       execArgv.unshift(...tsNodeArgv);

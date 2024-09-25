@@ -254,19 +254,18 @@ class DownloadClient {
     await this.socket.emitWithAck("download:verified", job);
   }
 
-  async addDownload(job: DownloadJob): Promise<void> {
+  async addDownload(job: DownloadJob): Promise<any> {
     try {
       parseRange(job);
 
       const run = await this.controller.addPart(job.n, job);
       if (!run) {
-        debug(
-          "not adding download job for %s in range %s because it already exists",
-          job.path,
-          job.range.toString()
-        );
-        await this.socket.emitWithAck("download:complete", job);
-        return;
+        // debug(
+        //   "not adding download job for %s in range %s because it already exists",
+        //   job.path,
+        //   job.range.toString()
+        // );
+        return this.socket.emitWithAck("download:complete", job);
       }
 
       const key = [job.n, job.path, job.range.toString(), job.checksumMD5].join(

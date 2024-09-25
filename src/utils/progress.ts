@@ -32,7 +32,7 @@ export class Progress {
 
   setComplete(part: _Part): void {
     this.bytes += part.range.size();
-    this.update();
+    this.pulse();
   }
 
   pulse(): void {
