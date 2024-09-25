@@ -21,7 +21,7 @@ export class DownloadServer {
   interval: number;
 
   downloads: Set<string> = new Set();
-  checksums: Set<number> = new Set();
+  checksums: Set<string> = new Set();
 
   constructor(io: _Server, interval: number) {
     this.io = io;
@@ -97,17 +97,46 @@ export class DownloadServer {
       return;
     }
 
+    const { controller } = this.io;
+
     debug("checking for new download jobs");
     const storageProviders = [];
     const seen: Set<string> = new Set();
-    for (const storageProvider of await this.io.controller.getStorageProviders()) {
+    for (const storageProvider of await controller.getStorageProviders()) {
       if (seen.has(storageProvider.key)) {
         continue;
       }
       seen.add(storageProvider.key);
       storageProviders.push(storageProvider);
     }
-    await Promise.all(storageProviders.map(this.checkDownloadJobs, this));
+
+    const fileIdSets = await Promise.all(
+      storageProviders.map(this.checkDownloadJobs, this)
+    );
+
+    const fileIdsForChecksumJobs: Set<number> = new Set();
+    for (const fileIdSet of fileIdSets) {
+      for (const fileId of fileIdSet) {
+        fileIdsForChecksumJobs.add(fileId);
+      }
+    }
+
+    for (const file of await controller.getUnverifiedFiles()) {
+      fileIdsForChecksumJobs.add(file.id);
+    }
+    // debug("sending %o checksum jobs", fileIdsForChecksumJobs.size);
+    for (const fileId of fileIdsForChecksumJobs) {
+      const file = await controller.getFileById(fileId);
+      if (file === null) {
+        throw new Error(`File not found for id ${fileId}`);
+      }
+      const key = `${fileId}:${file.checksumSHA256}`;
+      if (this.checksums.has(key)) {
+        continue;
+      }
+      this.checksums.add(key);
+      await this.submitChecksumJob(file);
+    }
 
     const loop = this.loop.bind(this);
     setTimeout(loop, this.interval);
@@ -137,7 +166,9 @@ export class DownloadServer {
     debug("created download job %o", downloadJob);
     return downloadJob;
   }
-  async checkDownloadJobs(storageProvider: StorageProvider): Promise<void> {
+  async checkDownloadJobs(
+    storageProvider: StorageProvider
+  ): Promise<Set<number>> {
     const { controller } = this.io;
     const { storage } = storageProvider;
 
@@ -147,7 +178,7 @@ export class DownloadServer {
     let chunkSize: number = 16;
     for await (const object of storage.listObjects()) {
       if (!this.isLooping) {
-        return;
+        return fileIdsForChecksumJobs;
       }
       try {
         if (object.Bucket === undefined) {
@@ -230,17 +261,7 @@ export class DownloadServer {
 
     await this.sendDownloadJobs(downloadJobs);
 
-    for (const file of await controller.getUnverifiedFiles()) {
-      fileIdsForChecksumJobs.add(file.id);
-    }
-    // debug("sending %o checksum jobs", fileIdsForChecksumJobs.size);
-    for (const fileId of fileIdsForChecksumJobs) {
-      const file = await controller.getFileById(fileId);
-      if (file === null) {
-        throw new Error(`File not found for id ${fileId}`);
-      }
-      await this.submitChecksumJob(file);
-    }
+    return fileIdsForChecksumJobs;
   }
 
   private async sendDownloadJobs(downloadJobs: DownloadJob[]): Promise<void> {
