@@ -93,7 +93,6 @@ export class DownloadServer {
   }
   async loop(): Promise<void> {
     if (!this.isLooping) {
-      debug("stopping loop");
       return;
     }
 
@@ -142,6 +141,7 @@ export class DownloadServer {
     setTimeout(loop, this.interval);
   }
   stopLoop(): void {
+    debug("stopping loop");
     this.isLooping = false;
   }
 
