@@ -154,6 +154,7 @@ class DownloadClient {
   }
 
   terminate() {
+    this.controller.queue.kill();
     this.abortController.abort();
     this.progress.terminate();
     this.socket.disconnect();
@@ -161,16 +162,22 @@ class DownloadClient {
   }
 
   listen() {
-    this.socket.on("download:create", async (downloadJobs: DownloadJob[]) => {
-      const promises: Promise<void>[] = [];
-      for (const downloadJob of downloadJobs) {
-        promises.push(this.addDownload(downloadJob));
+    this.socket.on(
+      "download:create",
+      async (downloadJobs: DownloadJob[], callback: (u: unknown) => void) => {
+        const promises: Promise<void>[] = [];
+        for (const downloadJob of downloadJobs) {
+          promises.push(this.addDownload(downloadJob));
+        }
+        await Promise.allSettled(promises);
+        promises.splice(0, promises.length);
+        for (const downloadJob of downloadJobs) {
+          promises.push(this.verify(downloadJob));
+        }
+        await Promise.allSettled(promises);
+        callback(true);
       }
-      await Promise.all(promises);
-      for (const downloadJob of downloadJobs) {
-        await this.verify(downloadJob);
-      }
-    });
+    );
     this.socket.on("download:checksum", async (checksumJob: ChecksumJob) => {
       try {
         const { n, path, checksumSHA256 } = checksumJob;

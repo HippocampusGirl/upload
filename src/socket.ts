@@ -27,7 +27,10 @@ interface ClientToServerEvents {
 }
 
 interface ServerToClientEvents {
-  "download:create": (downloadJobs: DownloadJob[]) => void;
+  "download:create": (
+    downloadJobs: DownloadJob[],
+    callback: (u: unknown) => void
+  ) => void;
   "download:checksum": (checksumJob: ChecksumJob) => void;
 }
 

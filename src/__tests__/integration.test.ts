@@ -346,6 +346,8 @@ describe.each([postgresDatabaseConfigFactory])(
         ]);
         debug("uploaded modified file");
 
+        await promisify(setTimeout)(1000);
+
         await expect(check()).resolves.toBe(modifiedUploadFileChecksumSHA256);
       },
       1 * 60 * 1000

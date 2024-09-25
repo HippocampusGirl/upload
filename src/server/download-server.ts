@@ -78,6 +78,10 @@ export class DownloadServer {
   }
 
   startLoop(): void {
+    if (this.isLooping) {
+      return;
+    }
+
     debug("starting loop");
     this.isLooping = true;
 
@@ -215,13 +219,13 @@ export class DownloadServer {
       }
 
       if (downloadJobs.length >= chunkSize) {
-        this.sendDownloadJobs(downloadJobs);
+        await this.sendDownloadJobs(downloadJobs);
         downloadJobs = [];
         chunkSize *= 2;
       }
     }
 
-    this.sendDownloadJobs(downloadJobs);
+    await this.sendDownloadJobs(downloadJobs);
 
     for (const file of await controller.getUnverifiedFiles()) {
       fileIdsForChecksumJobs.add(file.id);
@@ -236,10 +240,16 @@ export class DownloadServer {
     }
   }
 
-  private sendDownloadJobs(downloadJobs: DownloadJob[]): void {
-    const io = this.io;
+  private async sendDownloadJobs(downloadJobs: DownloadJob[]): Promise<void> {
     // debug("sending %o download jobs", downloadJobs.length);
-    io.to("download").emit("download:create", downloadJobs);
+    try {
+      await this.io
+        .to("download")
+        .timeout(10 * 1000)
+        .emitWithAck("download:create", downloadJobs);
+    } catch (error) {
+      debug("timeout for download jobs: %O", error);
+    }
   }
 
   async submitChecksumJob(file: File): Promise<void> {
