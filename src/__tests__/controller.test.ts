@@ -61,7 +61,7 @@ describe("controller", () => {
     expect(dataSource.isInitialized).toBe(true);
     const controller = new Controller(dataSource);
 
-    const checksumSHA256 = randomBytes(32).toString("hex");
+    let checksumSHA256 = randomBytes(32).toString("hex");
     expect(checksumSHA256.length).toBe(64);
     const checksumMD5 = randomBytes(16).toString("hex");
     expect(checksumMD5.length).toBe(32);
@@ -96,10 +96,26 @@ describe("controller", () => {
       path,
       size,
     });
+
+    expect(
+      controller.setChecksumSHA256(n, path, checksumSHA256)
+    ).resolves.toBeUndefined();
     await expect(controller.getFileByPath(n, path)).resolves.toMatchObject({
       path,
       checksumSHA256,
       verified: true,
+    });
+
+    checksumSHA256 = randomBytes(32).toString("hex");
+    expect(checksumSHA256.length).toBe(64);
+
+    expect(
+      controller.setChecksumSHA256(n, path, checksumSHA256)
+    ).resolves.toBeUndefined();
+    await expect(controller.getFileByPath(n, path)).resolves.toMatchObject({
+      path,
+      checksumSHA256,
+      verified: false,
     });
   });
 

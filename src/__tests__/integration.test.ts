@@ -280,7 +280,7 @@ describe.each([postgresDatabaseConfigFactory])(
           "--interval",
           "1000",
         ]);
-        await promisify(setTimeout)(1000);
+        await promisify(setTimeout)(2000);
         await runCommand([
           "upload-client",
           "--endpoint",

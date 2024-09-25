@@ -146,6 +146,9 @@ export class DownloadServer {
 
     let chunkSize: number = 16;
     for await (const object of storage.listObjects()) {
+      if (!this.isLooping) {
+        return;
+      }
       try {
         if (object.Bucket === undefined) {
           throw new Error('"object.Bucket" is undefined');

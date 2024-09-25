@@ -127,6 +127,12 @@ export class Controller {
     checksumSHA256: string
   ): Promise<void> {
     return await this.submitTransaction(async (manager) => {
+      const file = await manager.findOneBy(File, { n, path });
+      if (file !== null) {
+        if (file.checksumSHA256 === checksumSHA256) {
+          return;
+        }
+      }
       await upsert(
         manager,
         File,
