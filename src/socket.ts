@@ -7,8 +7,8 @@ import { DownloadCompleteError, UploadCreateError } from "./errors.js";
 
 interface ClientToServerEvents {
   "download:complete": (
-    downloadJob: DownloadJob,
-    callback: (u: DownloadCompleteError | undefined) => void
+    jobs: DownloadJob[],
+    callback: (u: (DownloadCompleteError | null)[]) => void
   ) => void;
   "download:verified": (file: DownloadFile, callback: () => void) => void;
   "upload:create": (
@@ -29,7 +29,7 @@ interface ClientToServerEvents {
 interface ServerToClientEvents {
   "download:create": (
     downloadJobs: DownloadJob[],
-    callback: (u: unknown) => void
+    callback: (u: boolean) => void
   ) => void;
   "download:checksum": (checksumJob: ChecksumJob) => void;
 }

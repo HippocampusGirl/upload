@@ -14,10 +14,10 @@ import { Transform, TransformCallback } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { promisify } from "node:util";
 import { Dispatcher, request } from "undici";
-import { parseRange } from "../part.js";
 import { InvalidResponseError, retryCodes } from "../utils/http-client.js";
 import { tsNodeArgv } from "../utils/loader.js";
-import { Range } from "../utils/range.js";
+import type { Range } from "../utils/range.js";
+import { size } from "../utils/range.js";
 import { calculateChecksum } from "./fs.js";
 
 const debug = Debug("worker");
@@ -208,9 +208,6 @@ export const worker = (): void => {
     return checksumMD5;
   };
   const checksum = async (input: ChecksumInput): Promise<string> => {
-    if (input.range !== undefined) {
-      parseRange(input);
-    }
     const { path, algorithm, range } = input;
     if (typeof path !== "string") {
       throw new Error("Invalid path");
@@ -218,8 +215,11 @@ export const worker = (): void => {
     if (typeof algorithm !== "string") {
       throw new Error("Invalid algorithm");
     }
-    if (!(range === undefined || range instanceof Range)) {
-      throw new Error(`Invalid range ${range}`);
+    if (range !== undefined) {
+      const { start, end } = range;
+      if (typeof start !== "number" || typeof end !== "number") {
+        throw new Error("Invalid range");
+      }
     }
     const checksum = await calculateChecksum(path, algorithm, range);
     return checksum;
@@ -270,11 +270,11 @@ const factory = async (data: Dispatcher.ResponseData): Promise<void> => {
   } = data.opaque as Opaque;
 
   const md5 = createHash("md5");
-  let size = 0;
+  let bodySize = 0;
   const transform = new Transform({
     transform(chunk: any, _, callback: TransformCallback) {
       md5.update(chunk);
-      size += chunk.length;
+      bodySize += chunk.length;
       callback(null, chunk);
     },
   });
@@ -284,10 +284,10 @@ const factory = async (data: Dispatcher.ResponseData): Promise<void> => {
 
   // debug('finished writing "%s"', path);
   if (end !== undefined) {
-    const expected = new Range(start, end).size();
-    if (size !== expected) {
+    const expected = size({ start, end });
+    if (bodySize !== expected) {
       throw new InvalidResponseError(
-        `Content length does not match suffix: ${size} != ${expected}`
+        `Content length does not match suffix: ${bodySize} != ${expected}`
       );
     }
   }

@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { DataSource } from "typeorm";
 import { Controller } from "../controller.js";
 import { getDataSource } from "../entity/data-source.js";
-import { Range } from "../utils/range.js";
+import type { Range } from "../utils/range.js";
 
 const debug = Debug("test");
 
@@ -43,12 +43,12 @@ describe("controller", () => {
     const path = "part-path";
     const size = 100;
 
-    const range = new Range(0, 10);
+    const range = { start: 0, end: 10 };
     const filePart = { path, range, checksumMD5, size };
     expect(controller.addPart(n, filePart)).resolves.toBeTruthy();
     const part = await controller.getPart(checksumMD5, range);
     expect(part).not.toBeFalsy();
-    expect(part).toMatchObject({ range });
+    expect(part).toMatchObject(range);
     expect(part!.file).toMatchObject({ path });
 
     await expect(controller.setComplete(n, filePart)).resolves.toMatchObject({
@@ -82,7 +82,7 @@ describe("controller", () => {
     expect(files[0]).toMatchObject({ path, checksumSHA256, verified: false });
 
     const size = 100;
-    const range = new Range(0, 10);
+    const range: Range = { start: 0, end: 10 };
     const filePart = { path, range, checksumMD5, size };
     await expect(controller.addPart(n, filePart)).resolves.toBeTruthy();
 
@@ -129,7 +129,7 @@ describe("controller", () => {
     expect(checksumMD5.length).toBe(32);
 
     const path = "file-parts-path";
-    const range = new Range(0, 10);
+    const range: Range = { start: 0, end: 10 };
     const size = 100;
     expect(
       controller.addPart(n, { path, range, checksumMD5, size })
@@ -143,7 +143,7 @@ describe("controller", () => {
     expect(parts).not.toBeFalsy();
     expect(parts).toHaveLength(1);
     debug(parts);
-    expect(parts![0]).toMatchObject({ range });
+    expect(parts![0]).toMatchObject(range);
 
     let _file = await controller.getFileById(file!.id);
     expect(_file).not.toBeNull();
@@ -167,7 +167,7 @@ describe("controller", () => {
 
     const path = "large-file";
 
-    const range = new Range(65037519650, 65105980196);
+    const range: Range = { start: 65037519650, end: 65105980196 };
     expect(
       controller.addPart(n, {
         path,
@@ -190,7 +190,7 @@ describe("controller", () => {
     const path = "part-modify";
     const size = 100;
 
-    const range = new Range(0, 10);
+    const range: Range = { start: 0, end: 10 };
     const filePart = { path, range, checksumMD5, size };
     await expect(
       new Controller(dataSource).addPart(n, filePart)

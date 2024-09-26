@@ -7,11 +7,10 @@ import { File } from "../entity/file.js";
 import { Part } from "../entity/part.js";
 import { StorageProvider } from "../entity/storage-provider.js";
 import { DownloadCompleteError } from "../errors.js";
-import { parseRange } from "../part.js";
 import { _Server, _ServerSocket } from "../socket.js";
 import { BucketObject, Storage } from "../storage/base.js";
-import { Range } from "../utils/range.js";
-
+import type { Range } from "../utils/range.js";
+import { parse, size, toString } from "../utils/range.js";
 const debug = Debug("server");
 
 const checksumMD5Schema = Joi.string().required().hex().length(32);
@@ -37,31 +36,12 @@ export class DownloadServer {
     socket.on(
       "download:complete",
       async (
-        downloadJob: DownloadJob,
-        callback: (u: DownloadCompleteError | undefined) => void
+        jobs: DownloadJob[],
+        callback: (u: (DownloadCompleteError | null)[]) => void
       ) => {
-        parseRange(downloadJob);
-
-        const storageProvider = await controller.getStorageProvider(
-          downloadJob.storageProviderId
-        );
-        if (storageProvider === null) {
-          callback({ error: "unknown-storage-provider" });
-          return;
-        }
-        const { storage } = storageProvider;
-        try {
-          await storage.deleteFile(downloadJob.bucket, makeKey(downloadJob));
-        } catch (error) {
-          debug(
-            "could not delete part %o from storage provider: %O",
-            downloadJob,
-            error
-          );
-          callback({ error: "unknown" });
-        }
-        debug("download complete %o", downloadJob);
-        callback(undefined);
+        const errors = await Promise.all(jobs.map(this.complete, this));
+        debug("completed %d download jobs", jobs.length);
+        callback(errors);
       }
     );
     socket.on(
@@ -153,12 +133,14 @@ export class DownloadServer {
     if (object.Key === undefined) {
       throw new Error('"object.Key" is undefined');
     }
+    const { start, end } = part;
+    const range = { start, end };
     const downloadJob: DownloadJob = {
       n: part.file.n,
       storageProviderId: storage.storageProvider.id,
       bucket: object.Bucket,
       url: await storage.getDownloadUrl(object.Bucket, object.Key),
-      range: part.range,
+      range,
       path: part.file.path,
       checksumMD5: part.checksumMD5,
       size: part.file.size!,
@@ -175,7 +157,7 @@ export class DownloadServer {
     let fileIdsForChecksumJobs: Set<number> = new Set();
     let downloadJobs: DownloadJob[] = [];
 
-    let size: number = 16;
+    let count: number = 16;
     let promise: Promise<any> | null = null;
     for await (const object of storage.listObjects()) {
       if (!this.isLooping) {
@@ -195,9 +177,9 @@ export class DownloadServer {
           throw new Error('"object.ETag" is undefined');
         }
 
-        let range;
+        let range: Range;
         try {
-          range = Range.parse(object.Key);
+          range = parse(object.Key);
         } catch (error) {
           debug(
             "deleting unknown file %o because the range could not be parsed: %O",
@@ -207,10 +189,10 @@ export class DownloadServer {
           await storage.deleteFile(object.Bucket, object.Key);
           continue;
         }
-        if (range.size() !== object.Size) {
+        if (size(range) !== object.Size) {
           throw new Error(
             "Mismatched size between object and range in file name: " +
-              `${object.Size} != ${range.size()}`
+              `${object.Size} != ${size(range)}`
           );
         }
 
@@ -222,7 +204,7 @@ export class DownloadServer {
             "deleting unknown file %o with checksum %o and range %o",
             object.Key,
             checksumMD5,
-            range.toString()
+            toString(range)
           );
           await storage.deleteFile(object.Bucket, object.Key);
           continue;
@@ -253,34 +235,58 @@ export class DownloadServer {
         debug("could not parse object %o: %O", object, error);
       }
 
-      if (downloadJobs.length >= size) {
+      if (downloadJobs.length >= count) {
         if (promise !== null) {
           await promise;
         }
-        promise = this.sendDownloadJobs(downloadJobs);
+        promise = this.send(downloadJobs);
         downloadJobs = [];
-        size *= 2;
+        count *= 2;
       }
     }
 
     if (promise !== null) {
       await promise;
     }
-    await this.sendDownloadJobs(downloadJobs);
+    await this.send(downloadJobs);
 
     return fileIdsForChecksumJobs;
   }
 
-  private async sendDownloadJobs(downloadJobs: DownloadJob[]): Promise<void> {
-    debug("sending %d download jobs", downloadJobs.length);
+  private async send(jobs: DownloadJob[]): Promise<void> {
+    if (jobs.length === 0) {
+      return;
+    }
+
+    const ns = [...new Set(jobs.map((job) => job.n))].join("|");
+    debug("sending %d download jobs for %s", jobs.length, ns);
     try {
       await this.io
         .to("download")
         .timeout(60 * 1000)
-        .emitWithAck("download:create", downloadJobs);
+        .emitWithAck("download:create", jobs);
     } catch (error) {
       debug("timeout for download jobs");
     }
+  }
+  private async complete(
+    job: DownloadJob
+  ): Promise<DownloadCompleteError | null> {
+    const { controller } = this.io;
+    const storageProvider = await controller.getStorageProvider(
+      job.storageProviderId
+    );
+    if (storageProvider === null) {
+      return { error: "unknown-storage-provider" };
+    }
+    const { storage } = storageProvider;
+    try {
+      await storage.deleteFile(job.bucket, makeKey(job));
+    } catch (error) {
+      debug("could not delete part %o from storage provider: %O", job, error);
+      return { error: "unknown" };
+    }
+    return null;
   }
 
   async submitChecksumJob(file: File): Promise<void> {

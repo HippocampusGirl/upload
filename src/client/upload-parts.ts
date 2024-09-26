@@ -1,7 +1,7 @@
 import { stat } from "node:fs/promises";
 
 import { FilePart, Job } from "../part.js";
-import { Range } from "../utils/range.js";
+import { toSuffix } from "../utils/range.js";
 import { WorkerPool } from "./worker.js";
 
 export interface UploadRequest extends FilePart {}
@@ -38,7 +38,7 @@ export async function* generateUploadRequests(
     // Last part cannot go beyond the end of the file
     end = (end > size ? size : end) - 1;
 
-    const range = new Range(start, end);
+    const range = { start, end };
     const checksumMD5 = await workerPool.checksum({
       path,
       algorithm: "md5",
@@ -51,6 +51,6 @@ export async function* generateUploadRequests(
 
 export const makeKey = (uploadRequest: UploadRequest): string => {
   const { range, size } = uploadRequest;
-  const suffix = range.toSuffix(size);
+  const suffix = toSuffix(range, size);
   return `${uploadRequest.path}${suffix}`;
 };

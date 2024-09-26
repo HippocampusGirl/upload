@@ -17,7 +17,7 @@ import { worker } from "./client/worker.js";
 import { makeServeCommand } from "./server/serve.js";
 import { name, version } from "./utils/metadata.js";
 
-setGlobalDispatcher(new EnvHttpProxyAgent({ pipelining: 10, allowH2: true }));
+setGlobalDispatcher(new EnvHttpProxyAgent({ pipelining: 10 }));
 
 export const command = new Command();
 command

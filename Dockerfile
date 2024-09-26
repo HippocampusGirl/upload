@@ -1,4 +1,4 @@
-FROM node:slim as build
+FROM node as build
 
 # Run a clean build of the project and package it
 RUN --mount=type=bind,source=src,target=/upload/src \

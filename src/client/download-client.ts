@@ -10,11 +10,10 @@ import { Controller } from "../controller.js";
 import { ChecksumJob, DownloadFile, DownloadJob } from "../download-schema.js";
 import { getDataSource } from "../entity/data-source.js";
 import { File } from "../entity/file.js";
-import { parseRange } from "../part.js";
 import { _ClientSocket } from "../socket.js";
 import { downloadPayloadSchema } from "../utils/payload.js";
 import { Progress } from "../utils/progress.js";
-import { reduceRanges } from "../utils/range.js";
+import { reduceRanges, size } from "../utils/range.js";
 import { signal } from "../utils/signal.js";
 import { touch } from "./fs.js";
 import { clientFactory, endpointSchema } from "./socket-client.js";
@@ -107,19 +106,20 @@ const isComplete = async (file: File): Promise<boolean> => {
     // debug("file %o is not complete: no parts", file);
     return false;
   }
-  const ranges = parts
-    .filter(({ complete }) => complete)
-    .map(({ range }) => range);
-  const range = reduceRanges(ranges)[0];
+  const [range] = reduceRanges(parts.filter(({ complete }) => complete));
   if (range === undefined) {
     // debug("file %o is not complete: no ranges", file);
     return false;
   }
   const { start } = range;
-  const complete = start == 0 && range.size() == file.size;
+  const complete = start == 0 && size(range) == file.size;
   // debug("checked completion of file %o: %o", file, complete);
   return complete;
 };
+
+enum Status {
+  Complete,
+}
 
 class DownloadClient {
   endpoint: string;
@@ -130,7 +130,6 @@ class DownloadClient {
 
   basePath: string | null;
 
-  downloads: Set<string> = new Set();
   checksums: Set<string> = new Set();
 
   controller: Controller;
@@ -164,18 +163,15 @@ class DownloadClient {
   listen() {
     this.socket.on(
       "download:create",
-      async (downloadJobs: DownloadJob[], callback: (u: unknown) => void) => {
-        const promises: Promise<void>[] = [];
-        for (const downloadJob of downloadJobs) {
-          promises.push(this.addDownload(downloadJob));
-        }
-        await Promise.allSettled(promises);
-        promises.splice(0, promises.length);
-        for (const downloadJob of downloadJobs) {
-          promises.push(this.verify(downloadJob));
-        }
-        await Promise.allSettled(promises);
+      async (jobs: DownloadJob[], callback: (u: boolean) => void) => {
+        const results = await Promise.allSettled(jobs.map(this.add, this));
         callback(true);
+        const fulfilled = results.filter(
+          ({ status }) => status === "fulfilled"
+        ) as PromiseFulfilledResult<DownloadJob>[];
+        jobs = fulfilled.map(({ value }) => value);
+        await Promise.allSettled(jobs.map(this.verify, this));
+        const error = await this.socket.emitWithAck("download:complete", jobs);
       }
     );
     this.socket.on("download:checksum", async (checksumJob: ChecksumJob) => {
@@ -254,35 +250,17 @@ class DownloadClient {
     await this.socket.emitWithAck("download:verified", job);
   }
 
-  async addDownload(job: DownloadJob): Promise<any> {
-    try {
-      parseRange(job);
-
-      const run = await this.controller.addPart(job.n, job);
-      if (!run) {
-        // debug(
-        //   "not adding download job for %s in range %s because it already exists",
-        //   job.path,
-        //   job.range.toString()
-        // );
-        return this.socket.emitWithAck("download:complete", job);
-      }
-
-      const key = [job.n, job.path, job.range.toString(), job.checksumMD5].join(
-        ":"
-      );
-      if (this.downloads.has(key)) {
-        return;
-      }
-      this.downloads.add(key);
-
-      this.progress.addPart(job);
-      await this.download(job);
-    } catch (error) {
-      debug("failed to process download job: %O", error);
+  async add(job: DownloadJob): Promise<DownloadFile> {
+    const run = await this.controller.addPart(job.n, job);
+    if (!run) {
+      // await this.socket.emitWithAck("download:complete", job);
+      return job;
     }
+
+    this.progress.addPart(job);
+    return await this.download(job);
   }
-  async download(job: DownloadJob): Promise<void> {
+  async download(job: DownloadJob): Promise<DownloadFile> {
     const { url, range, checksumMD5 } = job;
 
     const path = this.makePath(job);
@@ -294,25 +272,20 @@ class DownloadClient {
     }
 
     await this.workerPool.download({ url, checksumMD5, headers, range, path });
-    await this.finalize(job);
-  }
-  async finalize(downloadJob: CompletedDownloadJob): Promise<void> {
-    this.progress.setComplete(downloadJob);
-    await this.controller.setComplete(downloadJob.n, downloadJob);
 
-    const error = await this.socket.emitWithAck(
-      "download:complete",
-      downloadJob
-    );
-    if (error) {
-      debug(
-        "received error %o from server after sending complete event for %o",
-        error,
-        downloadJob
-      );
-      return;
-    }
-    const { n, path } = downloadJob;
-    await this.verify({ n, path });
+    this.progress.setComplete(job);
+    await this.controller.setComplete(job.n, job);
+
+    // const error = await this.socket.emitWithAck("download:complete", job);
+    // if (error) {
+    //   debug(
+    //     "received error %o from server after sending complete event for %o",
+    //     error,
+    //     job
+    //   );
+    //   return;
+    // }
+
+    return job;
   }
 }

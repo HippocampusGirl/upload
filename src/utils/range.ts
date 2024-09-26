@@ -1,58 +1,54 @@
 const delimiter = ".";
-export class Range {
+
+export interface Range {
   start: number; // inclusive
   end: number; // inclusive
-
-  constructor(start: number, end: number) {
-    this.start = start;
-    this.end = end;
-  }
-
-  size(): number {
-    return this.end - this.start + 1;
-  }
-
-  equals(that: Range): boolean {
-    return this.start === that.start && this.end === that.end;
-  }
-  touches(that: Range): boolean {
-    return this.end + 1 == that.start || that.end + 1 == this.start;
-  }
-  overlaps(that: Range): boolean {
-    return (this.end + 1 > that.start) && (that.end + 1 > this.start);
-  }
-
-  toString(): string {
-    return `${this.start}-${this.end}`;
-  }
-
-  toSuffix(size: number): string {
-    const digits = size.toString(10).length;
-
-    const [start, end] = [this.start, this.end].map((n) =>
-      n.toString(10).padStart(digits, "0")
-    );
-    return `${delimiter}${start}-${end}`;
-  }
-
-  static parse(path: string): Range {
-    const tokens = path.split(delimiter);
-    const suffix = tokens.pop();
-    if (suffix === undefined) {
-      throw new Error(`Invalid path: ${path}`);
-    }
-    const [start, end]: (number | undefined)[] = suffix
-      .split("-")
-      .map((n) => parseInt(n, 10));
-    if (start === undefined || Number.isNaN(start) || start < 0) {
-      throw new Error(`Invalid start: ${path}`);
-    }
-    if (end === undefined || Number.isNaN(end) || end < start || end < 0) {
-      throw new Error(`Invalid end: ${path}`);
-    }
-    return new Range(start, end);
-  }
 }
+
+export const size = (range: Range): number => {
+  return range.end - range.start + 1;
+};
+
+export const equals = (a: Range, b: Range): boolean => {
+  return a.start === b.start && a.end === b.end;
+};
+export const touches = (a: Range, b: Range): boolean => {
+  return a.end + 1 == b.start || b.end + 1 == a.start;
+};
+export const overlaps = (a: Range, b: Range): boolean => {
+  return a.end + 1 > b.start && b.end + 1 > a.start;
+};
+
+export const toString = (range: Range): string => {
+  return `${range.start}-${range.end}`;
+};
+
+export const toSuffix = (range: Range, size: number): string => {
+  const digits = size.toString(10).length;
+
+  const [start, end] = [range.start, range.end].map((n) =>
+    n.toString(10).padStart(digits, "0")
+  );
+  return `${delimiter}${start}-${end}`;
+};
+
+export const parse = (path: string): Range => {
+  const tokens = path.split(delimiter);
+  const suffix = tokens.pop();
+  if (suffix === undefined) {
+    throw new Error(`Invalid path: ${path}`);
+  }
+  const [start, end]: (number | undefined)[] = suffix
+    .split("-")
+    .map((n) => parseInt(n, 10));
+  if (start === undefined || Number.isNaN(start) || start < 0) {
+    throw new Error(`Invalid start: ${path}`);
+  }
+  if (end === undefined || Number.isNaN(end) || end < start || end < 0) {
+    throw new Error(`Invalid end: ${path}`);
+  }
+  return { start, end };
+};
 
 const byStart = (a: Range, b: Range): number => Number(a.start - b.start);
 export const reduceRanges = (ranges: Range[]): Range[] =>
@@ -63,14 +59,14 @@ export const reduceRanges = (ranges: Range[]): Range[] =>
       return array;
     }
     const { start, end } = range;
-    if (previous.touches(range)) {
+    if (touches(previous, range)) {
       if (start < previous.start) {
         previous.start = start;
       }
       if (end > previous.end) {
         previous.end = end;
       }
-    } else if (previous.overlaps(range)) {
+    } else if (overlaps(previous, range)) {
       throw new Error(`Overlapping ranges: ${previous} ${range}`);
     } else {
       array.push(range);

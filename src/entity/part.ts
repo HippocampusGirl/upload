@@ -1,6 +1,12 @@
-import { Column, Entity, Index, JoinColumn, ManyToOne, PrimaryColumn } from "typeorm";
+import {
+  Column,
+  Entity,
+  Index,
+  JoinColumn,
+  ManyToOne,
+  PrimaryColumn,
+} from "typeorm";
 
-import { Range } from "../utils/range.js";
 import { File } from "./file.js";
 
 import type { Relation } from "typeorm/common/RelationType.js";
@@ -32,9 +38,5 @@ export class Part {
     this.end = end!;
     this.complete = complete || false;
     this.file = file!;
-  }
-
-  get range(): Range {
-    return new Range(this.start, this.end);
   }
 }

@@ -15,11 +15,11 @@ import { IncomingHttpHeaders } from "node:http";
 import { Transform, TransformCallback } from "node:stream";
 import { Dispatcher, request } from "undici";
 import { UploadCreateError } from "../errors.js";
-import { parseRange } from "../part.js";
 import { _ClientSocket } from "../socket.js";
 import { InvalidResponseError, retryCodes } from "../utils/http-client.js";
 import { uploadPayloadSchema } from "../utils/payload.js";
 import { Progress } from "../utils/progress.js";
+import { size } from "../utils/range.js";
 import { signal } from "../utils/signal.js";
 import { clientFactory, endpointSchema } from "./socket-client.js";
 import {
@@ -209,7 +209,6 @@ export class UploadClient {
         }
         continue;
       }
-      parseRange(result);
       this.progress.addPart(result);
 
       result.path = path;
@@ -255,7 +254,7 @@ export class UploadClient {
 
     const headers: IncomingHttpHeaders = {
       "Content-Type": "application/octet-stream",
-      "Content-Length": `${range.size()}`,
+      "Content-Length": `${size(range)}`,
     };
     const body = createReadStream(path, {
       ...range,

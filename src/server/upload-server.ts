@@ -2,7 +2,6 @@ import Debug from "debug";
 
 import { makeKey, UploadJob, UploadRequest } from "../client/upload-parts.js";
 import { UploadCreateError } from "../errors.js";
-import { parseRange } from "../part.js";
 import { _Server, _ServerSocket } from "../socket.js";
 
 const debug = Debug("server");
@@ -31,8 +30,6 @@ export class UploadServer {
     const getUploadJob = async (
       uploadRequest: UploadRequest
     ): Promise<UploadJob | UploadCreateError> => {
-      parseRange(uploadRequest);
-
       // Check if already exists
       let success;
       try {
@@ -74,7 +71,6 @@ export class UploadServer {
         uploadJob: UploadJob,
         callback: (u: UploadCreateError | undefined) => void
       ): Promise<void> => {
-        parseRange(uploadJob);
         // debug("received complete event for upload job %o", uploadJob);
         try {
           await controller.setComplete(n, uploadJob);
