@@ -14,6 +14,8 @@ export const endpointSchema = Joi.string().uri({
 });
 
 export class _WebSocket extends WS {
+  declare ws: WebSocket | null;
+
   override createSocket(
     uri: string,
     protocols: string | string[] | undefined,
@@ -23,7 +25,7 @@ export class _WebSocket extends WS {
   }
 
   override doWrite(_packet: Packet, data: RawData) {
-    this.ws.send(data);
+    this.ws!.send(data);
   }
 
   protected override async onData(data: RawData): Promise<void> {
@@ -32,6 +34,19 @@ export class _WebSocket extends WS {
       data = await data.arrayBuffer();
     }
     super.onData(data);
+  }
+
+  override doClose(): void {
+    if (this.ws === undefined || this.ws === null) {
+      return;
+    }
+    if (this.ws.readyState === WebSocket.OPEN) {
+      // close will error if the connection is not established
+      // leading to another call to doClose in a loop, eventually
+      // causing a "RangeError: Maximum call stack size exceeded"
+      this.ws.close();
+    }
+    this.ws = null;
   }
 }
 
