@@ -163,7 +163,7 @@ export class DownloadServer {
       checksumMD5: part.checksumMD5,
       size: part.file.size!,
     };
-    debug("created download job %o", downloadJob);
+    // debug("created download job %o", downloadJob);
     return downloadJob;
   }
   async checkDownloadJobs(
@@ -175,7 +175,8 @@ export class DownloadServer {
     let fileIdsForChecksumJobs: Set<number> = new Set();
     let downloadJobs: DownloadJob[] = [];
 
-    let chunkSize: number = 16;
+    let size: number = 16;
+    let promise: Promise<any> | null = null;
     for await (const object of storage.listObjects()) {
       if (!this.isLooping) {
         return fileIdsForChecksumJobs;
@@ -252,27 +253,33 @@ export class DownloadServer {
         debug("could not parse object %o: %O", object, error);
       }
 
-      if (downloadJobs.length >= chunkSize) {
-        await this.sendDownloadJobs(downloadJobs);
+      if (downloadJobs.length >= size) {
+        if (promise !== null) {
+          await promise;
+        }
+        promise = this.sendDownloadJobs(downloadJobs);
         downloadJobs = [];
-        chunkSize *= 2;
+        size *= 2;
       }
     }
 
+    if (promise !== null) {
+      await promise;
+    }
     await this.sendDownloadJobs(downloadJobs);
 
     return fileIdsForChecksumJobs;
   }
 
   private async sendDownloadJobs(downloadJobs: DownloadJob[]): Promise<void> {
-    // debug("sending %o download jobs", downloadJobs.length);
+    debug("sending %d download jobs", downloadJobs.length);
     try {
       await this.io
         .to("download")
-        .timeout(10 * 1000)
+        .timeout(60 * 1000)
         .emitWithAck("download:create", downloadJobs);
     } catch (error) {
-      debug("timeout for download jobs: %O", error);
+      debug("timeout for download jobs");
     }
   }
 
