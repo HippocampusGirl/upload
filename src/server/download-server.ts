@@ -57,9 +57,6 @@ export class DownloadServer extends EventEmitter {
         callback();
       }
     );
-    socket.once("disconnect", (reason) => {
-      debug("disconnect due to %s", reason);
-    });
 
     this.downloads.clear();
     this.checksums.clear();
