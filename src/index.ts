@@ -1,4 +1,4 @@
-#!/usr/bin/env -S NODE_OPTIONS="--no-warnings --enable-source-maps" node
+#!/usr/bin/env -S NODE_OPTIONS="--no-warnings --enable-source-maps --max-old-space-size=32768" node
 
 import "reflect-metadata";
 
