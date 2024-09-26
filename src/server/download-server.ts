@@ -1,6 +1,8 @@
 import Debug from "debug";
 import Joi from "joi";
 
+import EventEmitter, { once } from "node:events";
+import { promisify } from "node:util";
 import { makeKey } from "../client/upload-parts.js";
 import { ChecksumJob, DownloadFile, DownloadJob } from "../download-schema.js";
 import { File } from "../entity/file.js";
@@ -14,23 +16,26 @@ import { parse, size, toString } from "../utils/range.js";
 const debug = Debug("server");
 
 const checksumMD5Schema = Joi.string().required().hex().length(32);
-export class DownloadServer {
+
+const kConnectedEvent = Symbol("kConnectedEvent");
+
+export class DownloadServer extends EventEmitter {
   io: _Server;
-  isLooping: boolean;
   interval: number;
 
   downloads: Set<string> = new Set();
   checksums: Set<string> = new Set();
 
   constructor(io: _Server, interval: number) {
+    super();
+
     this.io = io;
-    this.isLooping = false;
     this.interval = interval;
+
+    setImmediate(this.loop.bind(this));
   }
 
   listen(socket: _ServerSocket) {
-    this.startLoop();
-
     const { controller } = this.io;
 
     socket.on(
@@ -53,32 +58,31 @@ export class DownloadServer {
       }
     );
     socket.once("disconnect", (reason) => {
-      debug("stopping loop after %s", reason);
-      this.isLooping = false;
+      debug("disconnect due to %s", reason);
     });
-  }
-
-  startLoop(): void {
-    if (this.isLooping) {
-      return;
-    }
-
-    debug("starting loop");
-    this.isLooping = true;
 
     this.downloads.clear();
     this.checksums.clear();
 
-    const loop = this.loop.bind(this);
-    setTimeout(loop, 1);
+    this.emit(kConnectedEvent);
   }
+
   async loop(): Promise<void> {
-    if (!this.isLooping) {
-      return;
+    while (true) {
+      await Promise.race([
+        once(this, kConnectedEvent),
+        promisify(setTimeout)(this.interval),
+      ]);
+
+      const sockets = await this.io.in("download").fetchSockets();
+      if (sockets.length > 0) {
+        await this.check();
+      }
     }
+  }
 
+  private async check() {
     const { controller } = this.io;
-
     debug("checking for new download jobs");
     const storageProviders = [];
     const seen: Set<string> = new Set();
@@ -117,9 +121,6 @@ export class DownloadServer {
       this.checksums.add(key);
       await this.submitChecksumJob(file);
     }
-
-    const loop = this.loop.bind(this);
-    setTimeout(loop, this.interval);
   }
 
   async createDownloadJob(
