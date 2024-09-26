@@ -52,8 +52,9 @@ export class DownloadServer {
         callback();
       }
     );
-    socket.once("disconnect", () => {
-      this.stopLoop();
+    socket.once("disconnect", (reason) => {
+      debug("stopping loop after %s", reason);
+      this.isLooping = false;
     });
   }
 
@@ -120,10 +121,6 @@ export class DownloadServer {
     const loop = this.loop.bind(this);
     setTimeout(loop, this.interval);
   }
-  stopLoop(): void {
-    debug("stopping loop");
-    this.isLooping = false;
-  }
 
   async createDownloadJob(
     storage: Storage,
@@ -160,9 +157,6 @@ export class DownloadServer {
     let count: number = 16;
     let promise: Promise<any> | null = null;
     for await (const object of storage.listObjects()) {
-      if (!this.isLooping) {
-        return fileIdsForChecksumJobs;
-      }
       try {
         if (object.Bucket === undefined) {
           throw new Error('"object.Bucket" is undefined');
@@ -300,7 +294,7 @@ export class DownloadServer {
       path,
       checksumSHA256,
     };
-    debug("sending checksum job", checksumJob);
+    debug("sending checksum job for %s/%s (%s)", n, path, checksumSHA256);
     io.to("download").emit("download:checksum", checksumJob);
   }
 }
