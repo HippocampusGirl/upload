@@ -11,6 +11,7 @@ import { ChecksumJob, DownloadFile, DownloadJob } from "../download-schema.js";
 import { getDataSource } from "../entity/data-source.js";
 import { File } from "../entity/file.js";
 import { _ClientSocket } from "../socket.js";
+import { CustomError } from "../utils/error.js";
 import { downloadPayloadSchema } from "../utils/payload.js";
 import { Progress } from "../utils/progress.js";
 import { reduceRanges, size } from "../utils/range.js";
@@ -19,9 +20,7 @@ import { touch } from "./fs.js";
 import { clientFactory, endpointSchema } from "./socket-client.js";
 import { WorkerPool } from "./worker.js";
 
-interface CompletedDownloadJob extends DownloadJob {
-  size: number;
-}
+class DuplicateError extends CustomError {}
 
 const debug = Debug("client");
 
@@ -117,10 +116,6 @@ const isComplete = async (file: File): Promise<boolean> => {
   return complete;
 };
 
-enum Status {
-  Complete,
-}
-
 class DownloadClient {
   endpoint: string;
   token: string;
@@ -130,6 +125,7 @@ class DownloadClient {
 
   basePath: string | null;
 
+  downloads: Set<string> = new Set();
   checksums: Set<string> = new Set();
 
   controller: Controller;
@@ -166,12 +162,35 @@ class DownloadClient {
       async (jobs: DownloadJob[], callback: (u: boolean) => void) => {
         const results = await Promise.allSettled(jobs.map(this.add, this));
         callback(true);
+
+        const rejected = results.filter(
+          ({ status }) => status === "rejected"
+        ) as PromiseRejectedResult[];
+        for (const { reason } of rejected) {
+          if (reason instanceof DuplicateError) {
+            continue;
+          }
+          debug("failed to process download job: %O", reason);
+        }
+
         const fulfilled = results.filter(
           ({ status }) => status === "fulfilled"
         ) as PromiseFulfilledResult<DownloadJob>[];
         jobs = fulfilled.map(({ value }) => value);
         await Promise.allSettled(jobs.map(this.verify, this));
-        const error = await this.socket.emitWithAck("download:complete", jobs);
+
+        const errors = await this.socket.emitWithAck("download:complete", jobs);
+        for (const [i, error] of errors.entries()) {
+          if (error === null) {
+            continue;
+          }
+          const job = jobs[i];
+          debug(
+            "received error %o from server after sending complete event for %o",
+            error,
+            job
+          );
+        }
       }
     );
     this.socket.on("download:checksum", async (checksumJob: ChecksumJob) => {
@@ -253,9 +272,16 @@ class DownloadClient {
   async add(job: DownloadJob): Promise<DownloadFile> {
     const run = await this.controller.addPart(job.n, job);
     if (!run) {
-      // await this.socket.emitWithAck("download:complete", job);
       return job;
     }
+
+    const key = [job.n, job.path, job.range.toString(), job.checksumMD5].join(
+      ":"
+    );
+    if (this.downloads.has(key)) {
+      throw new DuplicateError();
+    }
+    this.downloads.add(key);
 
     this.progress.addPart(job);
     return await this.download(job);
@@ -275,16 +301,6 @@ class DownloadClient {
 
     this.progress.setComplete(job);
     await this.controller.setComplete(job.n, job);
-
-    // const error = await this.socket.emitWithAck("download:complete", job);
-    // if (error) {
-    //   debug(
-    //     "received error %o from server after sending complete event for %o",
-    //     error,
-    //     job
-    //   );
-    //   return;
-    // }
 
     return job;
   }

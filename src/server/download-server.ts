@@ -52,7 +52,7 @@ export class DownloadServer {
         callback();
       }
     );
-    socket.on("disconnect", () => {
+    socket.once("disconnect", () => {
       this.stopLoop();
     });
   }
