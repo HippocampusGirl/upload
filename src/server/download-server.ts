@@ -160,10 +160,13 @@ export class DownloadServer extends EventEmitter {
     let promise: Promise<any> | null = null;
     for await (const object of storage.listObjects()) {
       try {
-        if (object.Bucket === undefined) {
+        const bucket = object.Bucket;
+        const key = object.Key;
+
+        if (bucket === undefined) {
           throw new Error('"object.Bucket" is undefined');
         }
-        if (object.Key === undefined) {
+        if (key === undefined) {
           throw new Error('"object.Key" is undefined');
         }
         if (object.Size === undefined) {
@@ -175,14 +178,14 @@ export class DownloadServer extends EventEmitter {
 
         let range: Range;
         try {
-          range = parse(object.Key);
+          range = parse(key);
         } catch (error) {
           debug(
             "deleting unknown file %o because the range could not be parsed: %O",
-            object.Key,
+            key,
             error
           );
-          await storage.deleteFile(object.Bucket, object.Key);
+          await storage.deleteFile(bucket, key);
           continue;
         }
         if (size(range) !== object.Size) {
@@ -198,32 +201,26 @@ export class DownloadServer extends EventEmitter {
         if (part === null) {
           debug(
             "deleting unknown file %o with checksum %o and range %o",
-            object.Key,
+            key,
             checksumMD5,
             toString(range)
           );
-          await storage.deleteFile(object.Bucket, object.Key);
+          await storage.deleteFile(bucket, key);
           continue;
         }
         const file = part.file;
         if (file.verified === true) {
-          debug("deleting part of verified file %o", object.Key);
-          await storage.deleteFile(object.Bucket, object.Key);
+          debug("deleting part of verified file %o", key);
+          await storage.deleteFile(bucket, key);
           continue;
         }
 
-        const key = [
-          storageProvider.id,
-          object.Bucket,
-          object.Key,
-          range.toString(),
-          checksumMD5,
-        ].join(":");
-        if (this.downloads.has(key)) {
-          // debug("already downloading file %o", object.Key);
+        const { id } = storageProvider;
+        const k = [id, bucket, key, toString(range), checksumMD5].join(":");
+        if (this.downloads.has(k)) {
           continue;
         }
-        this.downloads.add(key);
+        this.downloads.add(k);
 
         fileIdsForChecksumJobs.add(file.id);
         downloadJobs.push(await this.createDownloadJob(storage, object, part));

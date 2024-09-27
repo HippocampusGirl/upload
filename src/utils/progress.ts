@@ -1,7 +1,7 @@
 import { format } from "bytes";
 import formatDuration from "format-duration";
 
-import { _Part } from "../part.js";
+import type { Range } from "./range.js";
 import { size } from "./range.js";
 
 const activityIndicators = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
@@ -17,7 +17,7 @@ export class Progress {
 
   terminate() {}
 
-  addPart({ range }: _Part): void {
+  add({ range }: { range: Range }): void {
     this.total += size(range);
     this.update();
 
@@ -26,9 +26,9 @@ export class Progress {
     }
   }
 
-  setComplete({ range }: _Part): void {
+  complete({ range }: { range: Range }): void {
     this.bytes += size(range);
-    this.pulse();
+    this.update();
   }
 
   pulse(): void {
@@ -53,7 +53,7 @@ export class Progress {
       process.stderr.cursorTo(0);
       process.stderr.clearLine(1);
     } else {
-      process.stderr.write("\r");
+      process.stderr.write("\r"); // carriage return
     }
 
     const message = `${percentCompleteString} ${sizeString} ${timeString}`;

@@ -19,7 +19,7 @@ import { _ClientSocket } from "../socket.js";
 import { InvalidResponseError, retryCodes } from "../utils/http-client.js";
 import { uploadPayloadSchema } from "../utils/payload.js";
 import { Progress } from "../utils/progress.js";
-import { size } from "../utils/range.js";
+import { size, toString } from "../utils/range.js";
 import { signal } from "../utils/signal.js";
 import { clientFactory, endpointSchema } from "./socket-client.js";
 import {
@@ -197,19 +197,19 @@ export class UploadClient {
           );
         }
         if (error == "upload-exists") {
-          this.progress.addPart(uploadRequest);
-          this.progress.setComplete(uploadRequest);
+          this.progress.add(uploadRequest);
+          this.progress.complete(uploadRequest);
         } else {
           debug(
             'skipping upload job because "%s" for %s in range %s',
             result.error,
             uploadRequest.path,
-            uploadRequest.range.toString()
+            toString(uploadRequest.range)
           );
         }
         continue;
       }
-      this.progress.addPart(result);
+      this.progress.add(result);
 
       result.path = path;
       promises.push(this.queue.push(result));
@@ -301,7 +301,7 @@ export class UploadClient {
     return await this.finalize(job);
   }
   async finalize(uploadJob: CompletedUploadJob): Promise<CompletedUploadJob> {
-    this.progress.setComplete(uploadJob);
+    this.progress.complete(uploadJob);
 
     let error;
     try {

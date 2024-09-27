@@ -14,7 +14,7 @@ import { _ClientSocket } from "../socket.js";
 import { CustomError } from "../utils/error.js";
 import { downloadPayloadSchema } from "../utils/payload.js";
 import { Progress } from "../utils/progress.js";
-import { reduceRanges, size } from "../utils/range.js";
+import { reduceRanges, size, toString } from "../utils/range.js";
 import { signal } from "../utils/signal.js";
 import { touch } from "./fs.js";
 import { clientFactory, endpointSchema } from "./socket-client.js";
@@ -268,20 +268,20 @@ class DownloadClient {
   }
 
   async add(job: DownloadJob): Promise<DownloadFile> {
-    const run = await this.controller.addPart(job.n, job);
-    if (!run) {
-      return job;
-    }
-
-    const key = [job.n, job.path, job.range.toString(), job.checksumMD5].join(
-      ":"
-    );
+    const { n, path, range, checksumMD5 } = job;
+    const key = [n, path, toString(range), checksumMD5].join(":");
     if (this.downloads.has(key)) {
       throw new DuplicateError();
     }
     this.downloads.add(key);
 
-    this.progress.addPart(job);
+    this.progress.add(job);
+    const run = await this.controller.addPart(job.n, job);
+    if (!run) {
+      this.progress.complete(job);
+      return job;
+    }
+
     return await this.download(job);
   }
   async download(job: DownloadJob): Promise<DownloadFile> {
@@ -297,7 +297,7 @@ class DownloadClient {
 
     await this.workerPool.download({ url, checksumMD5, headers, range, path });
 
-    this.progress.setComplete(job);
+    this.progress.complete(job);
     await this.controller.setComplete(job.n, job);
 
     return job;
