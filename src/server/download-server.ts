@@ -23,6 +23,7 @@ export class DownloadServer extends EventEmitter {
   io: _Server;
   interval: number;
 
+  tokens: Set<string> = new Set();
   downloads: Set<string> = new Set();
   checksums: Set<string> = new Set();
 
@@ -58,8 +59,12 @@ export class DownloadServer extends EventEmitter {
       }
     );
 
-    this.downloads.clear();
-    this.checksums.clear();
+    const token = socket.handshake.auth["token"] as string;
+    if (!this.tokens.has(token)) {
+      this.downloads.clear();
+      this.checksums.clear();
+      this.tokens.add(token);
+    }
 
     this.emit(kConnectedEvent);
   }
@@ -152,7 +157,6 @@ export class DownloadServer extends EventEmitter {
     let fileIdsForChecksumJobs: Set<number> = new Set();
     let downloadJobs: DownloadJob[] = [];
 
-    let count: number = 16;
     let promise: Promise<any> | null = null;
     for await (const object of storage.listObjects()) {
       try {
@@ -227,13 +231,12 @@ export class DownloadServer extends EventEmitter {
         debug("could not parse object %o: %O", object, error);
       }
 
-      if (downloadJobs.length >= count) {
+      if (downloadJobs.length >= 1 << 10) {
         if (promise !== null) {
           await promise;
         }
         promise = this.send(downloadJobs);
         downloadJobs = [];
-        count *= 2;
       }
     }
 

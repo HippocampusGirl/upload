@@ -131,7 +131,6 @@ class DownloadClient {
   controller: Controller;
 
   workerPool: WorkerPool;
-  abortController = new AbortController();
 
   constructor(
     endpoint: string,
@@ -150,7 +149,6 @@ class DownloadClient {
 
   terminate() {
     this.controller.queue.kill();
-    this.abortController.abort();
     this.progress.terminate();
     this.socket.disconnect();
     this.workerPool.terminate();
