@@ -50,11 +50,11 @@ export class DownloadServer extends EventEmitter {
       ) => {
         const errors = await Promise.all(jobs.map(this.complete, this));
 
-        const ns = [...new Set(jobs.map((job) => job.n))].join("|");
+        const ns = new Set(jobs.map((job) => `${job.n}/${job.path}`));
         debug(
           "received complete event for %d download jobs for %s",
           jobs.length,
-          ns
+          [...ns].join("|")
         );
 
         const count = errors.filter((error) => error !== null).length;
@@ -130,6 +130,8 @@ export class DownloadServer extends EventEmitter {
 
   async checkDownloadJobs(storageProvider: StorageProvider): Promise<void> {
     const { storage } = storageProvider;
+
+    const jobs: DownloadJob[] = [];
     const promises: Promise<void>[] = [];
     for await (const object of storage.listObjects()) {
       promises.push(
@@ -148,7 +150,6 @@ export class DownloadServer extends EventEmitter {
       );
     }
 
-    const jobs: DownloadJob[] = [];
     await Promise.all(promises);
 
     await this.send(jobs);
