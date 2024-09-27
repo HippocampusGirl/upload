@@ -1,5 +1,4 @@
 import { Command, Option } from "commander";
-import Debug from "debug";
 import cluster, { Worker } from "node:cluster";
 import { once } from "node:events";
 import { readFileSync } from "node:fs";
@@ -23,6 +22,7 @@ import { Storage } from "../storage/base.js";
 import { tsNodeArgv } from "../utils/loader.js";
 import { Payload, payloadSchema } from "../utils/payload.js";
 import { signal } from "../utils/signal.js";
+import { debug } from "./debug.js";
 import { DownloadServer } from "./download-server.js";
 import { UploadServer } from "./upload-server.js";
 
@@ -39,8 +39,6 @@ interface ExtendedSocket {
 interface ExtendedServer {
   controller: Controller;
 }
-
-const debug = Debug("server");
 
 export let server: Server | undefined;
 

@@ -1,4 +1,3 @@
-import Debug from "debug";
 import Joi from "joi";
 
 import EventEmitter, { once } from "node:events";
@@ -13,7 +12,7 @@ import { _Server, _ServerSocket } from "../socket.js";
 import { BucketObject, Storage } from "../storage/base.js";
 import type { Range } from "../utils/range.js";
 import { parse, size, toString } from "../utils/range.js";
-const debug = Debug("server");
+import { debug } from "./debug.js";
 
 const checksumMD5Schema = Joi.string().required().hex().length(32);
 
@@ -76,7 +75,7 @@ export class DownloadServer extends EventEmitter {
         promisify(setTimeout)(this.interval),
       ]);
 
-      const sockets = await this.io.in("download").fetchSockets();
+      const sockets = await this.io.local.in("download").fetchSockets();
       if (sockets.length > 0) {
         await this.check();
       }

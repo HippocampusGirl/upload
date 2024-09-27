@@ -1,9 +1,16 @@
 import Debug from "debug";
 
 import {
-    _Object, BucketLocationConstraint, CreateBucketCommand, CreateBucketCommandInput,
-    DeleteObjectCommand, GetObjectCommand, ListBucketsCommand, ListObjectsCommand,
-    ListObjectsCommandInput, PutObjectCommand
+  _Object,
+  BucketLocationConstraint,
+  CreateBucketCommand,
+  CreateBucketCommandInput,
+  DeleteObjectCommand,
+  GetObjectCommand,
+  ListBucketsCommand,
+  ListObjectsCommand,
+  ListObjectsCommandInput,
+  PutObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
@@ -84,7 +91,7 @@ export class S3Storage extends Storage {
     } while (isTruncated);
   }
   async *listObjects(): AsyncGenerator<BucketObject, void, undefined> {
-    const { s3 } = this.storageProvider;
+    const { id, s3 } = this.storageProvider;
 
     const result = await s3.send(new ListBucketsCommand({}));
     const buckets: string[] = [];
@@ -96,7 +103,11 @@ export class S3Storage extends Storage {
     if (!buckets) {
       return;
     }
-    debug("listing %o buckets", buckets.length);
+    debug(
+      'listing buckets %s for storage provider "%s"',
+      buckets.join("|"),
+      id
+    );
     for (const bucket of buckets) {
       try {
         for await (const object of this.listObjectsInBucket(bucket)) {

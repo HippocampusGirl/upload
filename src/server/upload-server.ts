@@ -1,10 +1,7 @@
-import Debug from "debug";
-
 import { makeKey, UploadJob, UploadRequest } from "../client/upload-parts.js";
 import { UploadCreateError } from "../errors.js";
 import { _Server, _ServerSocket } from "../socket.js";
-
-const debug = Debug("server");
+import { debug } from "./debug.js";
 
 export class UploadServer {
   io: _Server;
