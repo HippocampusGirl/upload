@@ -45,7 +45,16 @@ export class DownloadServer extends EventEmitter {
         callback: (u: (DownloadCompleteError | null)[]) => void
       ) => {
         const errors = await Promise.all(jobs.map(this.complete, this));
-        debug("completed %d download jobs", jobs.length);
+
+        const ns = [...new Set(jobs.map((job) => job.n))].join("|");
+        const count = errors.filter((error) => error !== null).length;
+        debug(
+          "completed %d download jobs with %d errors for %s",
+          jobs.length,
+          count,
+          ns
+        );
+
         callback(errors);
       }
     );
@@ -60,6 +69,7 @@ export class DownloadServer extends EventEmitter {
 
     const token = socket.handshake.auth["token"] as string;
     if (!this.tokens.has(token)) {
+      debug("clearing downloads and checksums for new token");
       this.downloads.clear();
       this.checksums.clear();
       this.tokens.add(token);
