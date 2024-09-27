@@ -159,7 +159,6 @@ class DownloadClient {
       "download:create",
       async (jobs: DownloadJob[], callback: (u: boolean) => void) => {
         const results = await Promise.allSettled(jobs.map(this.add, this));
-        callback(true);
 
         const rejected = results.filter(
           ({ status }) => status === "rejected"
@@ -189,6 +188,8 @@ class DownloadClient {
             job
           );
         }
+
+        callback(true);
       }
     );
     this.socket.on("download:checksum", async (checksumJob: ChecksumJob) => {

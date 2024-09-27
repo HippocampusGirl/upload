@@ -10,7 +10,6 @@ import { StorageProvider } from "../entity/storage-provider.js";
 import { DownloadCompleteError } from "../errors.js";
 import { _Server, _ServerSocket } from "../socket.js";
 import { BucketObject, Storage } from "../storage/base.js";
-import { CustomError } from "../utils/error.js";
 import type { Range } from "../utils/range.js";
 import { parse, size, toString } from "../utils/range.js";
 import { debug } from "./debug.js";
@@ -19,14 +18,10 @@ const checksumMD5Schema = Joi.string().required().hex().length(32);
 
 const kConnectedEvent = Symbol("kConnectedEvent");
 
-class UnknownFileError extends CustomError {}
-class VerifiedFileError extends CustomError {}
-
 export class DownloadServer extends EventEmitter {
   io: _Server;
   interval: number;
 
-  tokens: Set<string> = new Set();
   sent: Set<string> = new Set();
   completed: Set<string> = new Set();
   checksums: Set<string> = new Set();
@@ -69,20 +64,16 @@ export class DownloadServer extends EventEmitter {
     socket.on(
       "download:verified",
       async (file: DownloadFile, callback: () => void) => {
+        debug("received verified event for %O", file);
         const { n, path } = file;
         await controller.setVerified(n, path);
         callback();
       }
     );
 
-    const token = socket.handshake.auth["token"] as string;
-    if (!this.tokens.has(token)) {
-      debug("clearing downloads and checksums for new token");
-      this.sent.clear();
-      this.completed.clear();
-      this.checksums.clear();
-      this.tokens.add(token);
-    }
+    debug("clearing sent downloads and checksums");
+    this.sent.clear();
+    this.checksums.clear();
 
     this.emit(kConnectedEvent);
   }
@@ -144,7 +135,7 @@ export class DownloadServer extends EventEmitter {
             }
 
             jobs.push(job);
-            if (jobs.length >= 1 << 10) {
+            if (jobs.length >= 100) {
               await this.send(jobs.splice(0, jobs.length));
             }
           })
