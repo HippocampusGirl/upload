@@ -7,3 +7,5 @@ export class CustomError extends Error {
     Object.setPrototypeOf(this, new.target.prototype);
   }
 }
+
+export class DuplicateError extends CustomError {}

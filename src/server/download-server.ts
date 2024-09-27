@@ -10,6 +10,7 @@ import { StorageProvider } from "../entity/storage-provider.js";
 import { DownloadCompleteError } from "../errors.js";
 import { _Server, _ServerSocket } from "../socket.js";
 import { BucketObject, Storage } from "../storage/base.js";
+import { CustomError, DuplicateError } from "../utils/error.js";
 import type { Range } from "../utils/range.js";
 import { parse, size, toString } from "../utils/range.js";
 import { debug } from "./debug.js";
@@ -17,6 +18,9 @@ import { debug } from "./debug.js";
 const checksumMD5Schema = Joi.string().required().hex().length(32);
 
 const kConnectedEvent = Symbol("kConnectedEvent");
+
+class UnknownFileError extends CustomError {}
+class VerifiedFileError extends CustomError {}
 
 export class DownloadServer extends EventEmitter {
   io: _Server;
@@ -47,13 +51,16 @@ export class DownloadServer extends EventEmitter {
         const errors = await Promise.all(jobs.map(this.complete, this));
 
         const ns = [...new Set(jobs.map((job) => job.n))].join("|");
-        const count = errors.filter((error) => error !== null).length;
         debug(
-          "completed %d download jobs with %d errors for %s",
+          "received complete event for %d download jobs for %s",
           jobs.length,
-          count,
           ns
         );
+
+        const count = errors.filter((error) => error !== null).length;
+        if (count > 0) {
+          debug("failed to set complete for %d download jobs", count);
+        }
 
         callback(errors);
       }
@@ -105,27 +112,10 @@ export class DownloadServer extends EventEmitter {
       storageProviders.push(storageProvider);
     }
 
-    const fileIdSets = await Promise.all(
-      storageProviders.map(this.checkDownloadJobs, this)
-    );
-
-    const fileIdsForChecksumJobs: Set<number> = new Set();
-    for (const fileIdSet of fileIdSets) {
-      for (const fileId of fileIdSet) {
-        fileIdsForChecksumJobs.add(fileId);
-      }
-    }
+    await Promise.all(storageProviders.map(this.checkDownloadJobs, this));
 
     for (const file of await controller.getUnverifiedFiles()) {
-      fileIdsForChecksumJobs.add(file.id);
-    }
-    // debug("sending %o checksum jobs", fileIdsForChecksumJobs.size);
-    for (const fileId of fileIdsForChecksumJobs) {
-      const file = await controller.getFileById(fileId);
-      if (file === null) {
-        throw new Error(`File not found for id ${fileId}`);
-      }
-      const key = `${fileId}:${file.checksumSHA256}`;
+      const key = `${file.id}:${file.checksumSHA256}`;
       if (this.checksums.has(key)) {
         continue;
       }
@@ -134,7 +124,115 @@ export class DownloadServer extends EventEmitter {
     }
   }
 
-  async createDownloadJob(
+  async checkDownloadJobs(storageProvider: StorageProvider): Promise<void> {
+    const { storage } = storageProvider;
+    const promises: Promise<DownloadJob>[] = [];
+    for await (const object of storage.listObjects()) {
+      promises.push(this.checkObject(storageProvider, object));
+    }
+
+    const jobs: DownloadJob[] = [];
+    await Promise.all(
+      promises.map(async (promise) => {
+        try {
+          jobs.push(await promise);
+        } catch (error) {
+          if (
+            !(
+              error instanceof DuplicateError ||
+              error instanceof UnknownFileError ||
+              error instanceof VerifiedFileError
+            )
+          ) {
+            debug("could not create download job: %O", error);
+          }
+        }
+
+        if (jobs.length >= 1 << 10) {
+          await this.send(jobs.splice(0, jobs.length));
+        }
+      })
+    );
+
+    await this.send(jobs);
+  }
+
+  private async checkObject(
+    storageProvider: StorageProvider,
+    object: BucketObject
+  ): Promise<DownloadJob> {
+    const { controller } = this.io;
+    const { storage } = storageProvider;
+
+    // try {
+    const bucket = object.Bucket;
+    const key = object.Key;
+
+    if (bucket === undefined) {
+      throw new Error('"object.Bucket" is undefined');
+    }
+    if (key === undefined) {
+      throw new Error('"object.Key" is undefined');
+    }
+    if (object.Size === undefined) {
+      throw new Error('"size" is undefined');
+    }
+    if (object.ETag === undefined) {
+      throw new Error('"object.ETag" is undefined');
+    }
+
+    let range: Range;
+    try {
+      range = parse(key);
+    } catch (error) {
+      debug(
+        "deleting unknown file %o because the range could not be parsed: %O",
+        key,
+        error
+      );
+      await storage.deleteFile(bucket, key);
+      throw new UnknownFileError();
+    }
+    if (size(range) !== object.Size) {
+      throw new Error(
+        "Mismatched size between object and range in file name: " +
+          `${object.Size} != ${size(range)}`
+      );
+    }
+
+    const checksumMD5 = object.ETag.replaceAll('"', "");
+    Joi.assert(checksumMD5, checksumMD5Schema);
+    const part = await controller.getPart(checksumMD5, range);
+    if (part === null) {
+      debug(
+        "deleting unknown file %o with checksum %o and range %o",
+        key,
+        checksumMD5,
+        toString(range)
+      );
+      await storage.deleteFile(bucket, key);
+      throw new UnknownFileError();
+    }
+    const file = part.file;
+    if (file.verified === true) {
+      debug("deleting part of verified file %o", key);
+      await storage.deleteFile(bucket, key);
+      throw new VerifiedFileError();
+    }
+
+    const { id } = storageProvider;
+    const k = [id, bucket, key, toString(range), checksumMD5].join(":");
+    if (this.downloads.has(k)) {
+      throw new DuplicateError();
+    }
+    this.downloads.add(k);
+
+    return this.createDownloadJob(storage, object, part);
+    // } catch (error) {
+    //   debug("could not parse object %o: %O", object, error);
+    // }
+  }
+  private async createDownloadJob(
     storage: Storage,
     object: BucketObject,
     part: Part
@@ -154,106 +252,8 @@ export class DownloadServer extends EventEmitter {
       checksumMD5: part.checksumMD5,
       size: part.file.size!,
     };
-    // debug("created download job %o", downloadJob);
     return downloadJob;
   }
-  async checkDownloadJobs(
-    storageProvider: StorageProvider
-  ): Promise<Set<number>> {
-    const { controller } = this.io;
-    const { storage } = storageProvider;
-
-    let fileIdsForChecksumJobs: Set<number> = new Set();
-    let downloadJobs: DownloadJob[] = [];
-
-    let promise: Promise<any> | null = null;
-    for await (const object of storage.listObjects()) {
-      try {
-        const bucket = object.Bucket;
-        const key = object.Key;
-
-        if (bucket === undefined) {
-          throw new Error('"object.Bucket" is undefined');
-        }
-        if (key === undefined) {
-          throw new Error('"object.Key" is undefined');
-        }
-        if (object.Size === undefined) {
-          throw new Error('"size" is undefined');
-        }
-        if (object.ETag === undefined) {
-          throw new Error('"object.ETag" is undefined');
-        }
-
-        let range: Range;
-        try {
-          range = parse(key);
-        } catch (error) {
-          debug(
-            "deleting unknown file %o because the range could not be parsed: %O",
-            key,
-            error
-          );
-          await storage.deleteFile(bucket, key);
-          continue;
-        }
-        if (size(range) !== object.Size) {
-          throw new Error(
-            "Mismatched size between object and range in file name: " +
-              `${object.Size} != ${size(range)}`
-          );
-        }
-
-        const checksumMD5 = object.ETag.replaceAll('"', "");
-        Joi.assert(checksumMD5, checksumMD5Schema);
-        const part = await controller.getPart(checksumMD5, range);
-        if (part === null) {
-          debug(
-            "deleting unknown file %o with checksum %o and range %o",
-            key,
-            checksumMD5,
-            toString(range)
-          );
-          await storage.deleteFile(bucket, key);
-          continue;
-        }
-        const file = part.file;
-        if (file.verified === true) {
-          debug("deleting part of verified file %o", key);
-          await storage.deleteFile(bucket, key);
-          continue;
-        }
-
-        const { id } = storageProvider;
-        const k = [id, bucket, key, toString(range), checksumMD5].join(":");
-        if (this.downloads.has(k)) {
-          continue;
-        }
-        this.downloads.add(k);
-
-        fileIdsForChecksumJobs.add(file.id);
-        downloadJobs.push(await this.createDownloadJob(storage, object, part));
-      } catch (error) {
-        debug("could not parse object %o: %O", object, error);
-      }
-
-      if (downloadJobs.length >= 1 << 10) {
-        if (promise !== null) {
-          await promise;
-        }
-        promise = this.send(downloadJobs);
-        downloadJobs = [];
-      }
-    }
-
-    if (promise !== null) {
-      await promise;
-    }
-    await this.send(downloadJobs);
-
-    return fileIdsForChecksumJobs;
-  }
-
   private async send(jobs: DownloadJob[]): Promise<void> {
     if (jobs.length === 0) {
       return;
