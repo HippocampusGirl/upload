@@ -100,7 +100,7 @@ export class S3Storage extends Storage {
         buckets.push(bucket.Name);
       }
     }
-    if (!buckets) {
+    if (buckets.length === 0) {
       return;
     }
     debug(

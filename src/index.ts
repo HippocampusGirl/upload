@@ -38,7 +38,7 @@ command
     if (options["debug"]) {
       Debug.enable("*");
     } else {
-      Debug.enable("client,server,storage,entity");
+      Debug.enable("client,server:*,storage,entity");
     }
   });
 
