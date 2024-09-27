@@ -271,7 +271,17 @@ export class UploadClient {
         bail: (e: Error) => void
       ): Promise<Dispatcher.ResponseData | void> => {
         try {
-          return await request(url, { method: "PUT", headers, body });
+          const data = await request(url, { method: "PUT", headers, body });
+          const { statusCode } = data;
+          if (statusCode !== 200) {
+            const message = `Received status code ${statusCode} from server`;
+            if (statusCode in retryCodes) {
+              throw new Error(message);
+            } else {
+              throw new InvalidResponseError(message);
+            }
+          }
+          return data;
         } catch (error: unknown) {
           if (error instanceof InvalidResponseError) {
             return bail(error);
@@ -286,18 +296,6 @@ export class UploadClient {
     if (data === undefined) {
       throw new Error("Upload failed");
     }
-
-    const { statusCode } = data;
-
-    if (statusCode !== 200) {
-      const message = `Received status code ${statusCode} from server`;
-      if (statusCode in retryCodes) {
-        throw new Error(message);
-      } else {
-        throw new InvalidResponseError(message);
-      }
-    }
-
     return await this.finalize(job);
   }
   async finalize(uploadJob: CompletedUploadJob): Promise<CompletedUploadJob> {

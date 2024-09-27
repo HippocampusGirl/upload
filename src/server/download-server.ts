@@ -27,7 +27,8 @@ export class DownloadServer extends EventEmitter {
   interval: number;
 
   tokens: Set<string> = new Set();
-  downloads: Set<string> = new Set();
+  sent: Set<string> = new Set();
+  completed: Set<string> = new Set();
   checksums: Set<string> = new Set();
 
   constructor(io: _Server, interval: number) {
@@ -77,7 +78,8 @@ export class DownloadServer extends EventEmitter {
     const token = socket.handshake.auth["token"] as string;
     if (!this.tokens.has(token)) {
       debug("clearing downloads and checksums for new token");
-      this.downloads.clear();
+      this.sent.clear();
+      this.completed.clear();
       this.checksums.clear();
       this.tokens.add(token);
     }
@@ -220,10 +222,10 @@ export class DownloadServer extends EventEmitter {
 
     const { id } = storageProvider;
     const k = [id, bucket, key, toString(range), checksumMD5].join(":");
-    if (this.downloads.has(k)) {
+    if (this.sent.has(k)) {
       return null;
     }
-    this.downloads.add(k);
+    this.sent.add(k);
 
     return this.createDownloadJob(storage, object, part);
     // } catch (error) {
@@ -271,6 +273,14 @@ export class DownloadServer extends EventEmitter {
   private async complete(
     job: DownloadJob
   ): Promise<DownloadCompleteError | null> {
+    const id = job.storageProviderId;
+    const { bucket, range, checksumMD5 } = job;
+    const key = makeKey(job);
+    const k = [id, bucket, key, toString(range), checksumMD5].join(":");
+    if (this.completed.has(k)) {
+      return null;
+    }
+
     const { controller } = this.io;
     const storageProvider = await controller.getStorageProvider(
       job.storageProviderId
@@ -280,11 +290,13 @@ export class DownloadServer extends EventEmitter {
     }
     const { storage } = storageProvider;
     try {
-      await storage.deleteFile(job.bucket, makeKey(job));
+      await storage.deleteFile(job.bucket, key);
     } catch (error) {
       debug("could not delete part %o from storage provider: %O", job, error);
       return { error: "unknown" };
     }
+
+    this.completed.add(k);
     return null;
   }
 
