@@ -10,7 +10,7 @@ import { StorageProvider } from "../entity/storage-provider.js";
 import { DownloadCompleteError } from "../errors.js";
 import { _Server, _ServerSocket } from "../socket.js";
 import { BucketObject, Storage } from "../storage/base.js";
-import { CustomError, DuplicateError } from "../utils/error.js";
+import { CustomError } from "../utils/error.js";
 import type { Range } from "../utils/range.js";
 import { parse, size, toString } from "../utils/range.js";
 import { debug } from "./debug.js";
@@ -94,7 +94,11 @@ export class DownloadServer extends EventEmitter {
 
       const sockets = await this.io.local.in("download").fetchSockets();
       if (sockets.length > 0) {
-        await this.check();
+        try {
+          await this.check();
+        } catch (error) {
+          debug("error in download server loop: %O", error);
+        }
       }
     }
   }
@@ -126,33 +130,26 @@ export class DownloadServer extends EventEmitter {
 
   async checkDownloadJobs(storageProvider: StorageProvider): Promise<void> {
     const { storage } = storageProvider;
-    const promises: Promise<DownloadJob>[] = [];
+    const promises: Promise<void>[] = [];
     for await (const object of storage.listObjects()) {
-      promises.push(this.checkObject(storageProvider, object));
+      promises.push(
+        this.checkObject(storageProvider, object)
+          .then(async (job: DownloadJob | null) => {
+            if (job === null) {
+              return;
+            }
+
+            jobs.push(job);
+            if (jobs.length >= 1 << 10) {
+              await this.send(jobs.splice(0, jobs.length));
+            }
+          })
+          .catch((error) => debug("could not create download job: %O", error))
+      );
     }
 
     const jobs: DownloadJob[] = [];
-    await Promise.all(
-      promises.map(async (promise) => {
-        try {
-          jobs.push(await promise);
-        } catch (error) {
-          if (
-            !(
-              error instanceof DuplicateError ||
-              error instanceof UnknownFileError ||
-              error instanceof VerifiedFileError
-            )
-          ) {
-            debug("could not create download job: %O", error);
-          }
-        }
-
-        if (jobs.length >= 1 << 10) {
-          await this.send(jobs.splice(0, jobs.length));
-        }
-      })
-    );
+    await Promise.all(promises);
 
     await this.send(jobs);
   }
@@ -160,7 +157,7 @@ export class DownloadServer extends EventEmitter {
   private async checkObject(
     storageProvider: StorageProvider,
     object: BucketObject
-  ): Promise<DownloadJob> {
+  ): Promise<DownloadJob | null> {
     const { controller } = this.io;
     const { storage } = storageProvider;
 
@@ -191,7 +188,7 @@ export class DownloadServer extends EventEmitter {
         error
       );
       await storage.deleteFile(bucket, key);
-      throw new UnknownFileError();
+      return null;
     }
     if (size(range) !== object.Size) {
       throw new Error(
@@ -211,19 +208,19 @@ export class DownloadServer extends EventEmitter {
         toString(range)
       );
       await storage.deleteFile(bucket, key);
-      throw new UnknownFileError();
+      return null;
     }
     const file = part.file;
     if (file.verified === true) {
       debug("deleting part of verified file %o", key);
       await storage.deleteFile(bucket, key);
-      throw new VerifiedFileError();
+      return null;
     }
 
     const { id } = storageProvider;
     const k = [id, bucket, key, toString(range), checksumMD5].join(":");
     if (this.downloads.has(k)) {
-      throw new DuplicateError();
+      return null;
     }
     this.downloads.add(k);
 
