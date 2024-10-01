@@ -22,7 +22,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - uses: cachix/install-nix-action@V27
+      - uses: cachix/install-nix-action@v29
 
       - run: npm clean-install
       - run: npm test
