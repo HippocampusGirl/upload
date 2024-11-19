@@ -16,5 +16,8 @@
     "editor.codeActionsOnSave": {
       "source.organizeImports": "always"
     }
+  },
+  "files.watcherExclude": {
+    "**/target": true
   }
 }

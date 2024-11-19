@@ -33,7 +33,7 @@ export const makeDownloadClientCommand = () => {
     .showHelpAfterError()
     .requiredOption("--endpoint <value>", "Where the server is located")
     .requiredOption("--token <value>", "Token to authenticate with the server")
-    .option("--base-path <value>", "Upload paths relative to this directory")
+    .option("--base-path <value>", "Download paths relative to this directory")
     .option(
       "--num-threads <count>",
       "Number of concurrent download threads",
@@ -111,7 +111,7 @@ const isComplete = async (file: File): Promise<boolean> => {
     return false;
   }
   const { start } = range;
-  const complete = start == 0 && size(range) == file.size;
+  const complete = start == 0 && size(range) >= file.size;
   // debug("checked completion of file %o: %o", file, complete);
   return complete;
 };
@@ -286,7 +286,7 @@ class DownloadClient {
     return await this.download(job);
   }
   async download(job: DownloadJob): Promise<DownloadFile> {
-    const { url, range, checksumMD5 } = job;
+    const { url, size, range, checksumMD5 } = job;
 
     const path = this.makePath(job);
     await touch(path);
@@ -296,7 +296,14 @@ class DownloadClient {
       headers["Authorization"] = this.token;
     }
 
-    await this.workerPool.download({ url, checksumMD5, headers, range, path });
+    await this.workerPool.download({
+      url,
+      checksumMD5,
+      headers,
+      range,
+      path,
+      size,
+    });
 
     this.progress.complete(job);
     await this.controller.setComplete(job.n, job);

@@ -59,15 +59,14 @@ export const reduceRanges = (ranges: Range[]): Range[] =>
       return array;
     }
     const { start, end } = range;
-    if (touches(previous, range)) {
+
+    if (touches(previous, range) || overlaps(previous, range)) {
       if (start < previous.start) {
         previous.start = start;
       }
       if (end > previous.end) {
         previous.end = end;
       }
-    } else if (overlaps(previous, range)) {
-      throw new Error(`Overlapping ranges: ${previous} ${range}`);
     } else {
       array.push(range);
     }

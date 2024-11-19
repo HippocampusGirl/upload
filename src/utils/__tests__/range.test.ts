@@ -20,11 +20,12 @@ describe("range", () => {
     const d = { start: 67132492, end: 83915614 };
     expect(overlaps(c, d)).toBe(false);
   });
-  it("throws an error when reducing overlapping ranges", () => {
+  it("can reduce overlapping ranges", () => {
     const ranges = [
       { start: 0, end: 10 },
       { start: 5, end: 15 },
     ];
-    expect(() => reduceRanges(ranges)).toThrow();
+    const reduced = reduceRanges(ranges);
+    expect(reduced[0]).toMatchObject({ start: 0, end: 15 });
   });
 });

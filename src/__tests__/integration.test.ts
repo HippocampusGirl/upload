@@ -321,7 +321,7 @@ describe.each([postgresDatabaseConfigFactory])(
       "can transfer modified file",
       async () => {
         await runShellCommand(
-          `dd if=/dev/urandom of=${uploadFile} conv=notrunc bs=1M count=1`
+          `dd if=/dev/urandom of=${uploadFile} bs=32M count=1`
         );
         const modifiedUploadFileChecksumSHA256 = await calculateChecksum(
           uploadFile,

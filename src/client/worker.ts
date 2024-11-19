@@ -1,23 +1,22 @@
 import retry from "async-retry";
 import Debug from "debug";
 import { AsyncResource } from "node:async_hooks";
+import { createHash } from "node:crypto";
 import EventEmitter from "node:events";
+import { createWriteStream } from "node:fs";
+import { open } from "node:fs/promises";
+import { IncomingHttpHeaders } from "node:http";
 import { availableParallelism } from "node:os";
 import { dirname, extname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { parentPort, Worker } from "node:worker_threads";
-
-import { createHash } from "node:crypto";
-import { createWriteStream } from "node:fs";
-import { IncomingHttpHeaders } from "node:http";
 import { Transform, TransformCallback } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { parentPort, Worker } from "node:worker_threads";
 import { Dispatcher, request } from "undici";
 import { InvalidResponseError, retryCodes } from "../utils/http-client.js";
 import { tsNodeArgv } from "../utils/loader.js";
-import type { Range } from "../utils/range.js";
-import { size } from "../utils/range.js";
+import { size, type Range } from "../utils/range.js";
 import { calculateChecksum } from "./fs.js";
 
 const debug = Debug("worker");
@@ -33,6 +32,7 @@ interface DownloadInput {
   url: string;
   checksumMD5: string;
   path: string;
+  size: number;
   range: Range;
   headers: IncomingHttpHeaders;
 }
@@ -181,8 +181,8 @@ export const worker = (): void => {
   }
 
   const download = async (input: DownloadInput): Promise<string> => {
-    const { url, checksumMD5, path, range, headers } = input;
-    const opaque: Opaque = { path, range, checksumMD5 };
+    const { url, checksumMD5, path, size, range, headers } = input;
+    const opaque: Opaque = { path, size, range, checksumMD5 };
 
     await retry(async (bail: (e: Error) => void) => {
       try {
@@ -247,6 +247,7 @@ export const worker = (): void => {
 
 interface Opaque {
   path: string;
+  size: number;
   range: Range;
   checksumMD5: string;
 }
@@ -263,11 +264,10 @@ const factory = async (data: Dispatcher.ResponseData): Promise<void> => {
     }
   }
 
+  const o = data.opaque as Opaque;
   const {
-    path,
     range: { start, end },
-    checksumMD5,
-  } = data.opaque as Opaque;
+  } = o;
 
   const md5 = createHash("md5");
   let bodySize = 0;
@@ -279,17 +279,14 @@ const factory = async (data: Dispatcher.ResponseData): Promise<void> => {
     },
   });
 
-  const write = createWriteStream(path, { flags: "r+", start });
+  const write = createWriteStream(o.path, { flags: "r+", start });
   await pipeline(data.body, transform, write);
 
-  // debug('finished writing "%s"', path);
-  if (end !== undefined) {
-    const expected = size({ start, end });
-    if (bodySize !== expected) {
-      throw new InvalidResponseError(
-        `Content length does not match suffix: ${bodySize} != ${expected}`
-      );
-    }
+  const expected = size({ start, end });
+  if (bodySize !== expected) {
+    throw new InvalidResponseError(
+      `Content length does not match suffix: ${bodySize} != ${expected}`
+    );
   }
   const etagHeader = data.headers["etag"];
   if (etagHeader === undefined) {
@@ -306,9 +303,19 @@ const factory = async (data: Dispatcher.ResponseData): Promise<void> => {
       '"etag" does not match MD5 checksum calculated from response body'
     );
   }
-  if (checksumMD5 !== etag) {
+  if (o.checksumMD5 !== etag) {
     throw new InvalidResponseError(
       '"etag" does not match MD5 checksum received from server'
     );
+  }
+
+  if (size({ start: 0, end }) == o.size) {
+    let fileHandle;
+    try {
+      fileHandle = await open(o.path, "r+");
+      await fileHandle.truncate(o.size);
+    } finally {
+      await fileHandle?.close();
+    }
   }
 };
