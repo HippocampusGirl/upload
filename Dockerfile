@@ -14,6 +14,6 @@ FROM node:slim
 
 # Copy the built package and install it globally
 RUN --mount=type=bind,from=build,source=/upload.tgz,target=/upload.tgz \
-    npm install --global /upload.tgz
+    npm install --loglevel silly --global /upload.tgz
 
 ENTRYPOINT ["/usr/local/bin/upload"]

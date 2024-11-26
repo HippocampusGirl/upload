@@ -25,7 +25,7 @@ interface ChecksumInput {
   type: "checksum";
   path: string;
   algorithm: string;
-  range?: Range;
+  range?: Range | undefined;
 }
 interface DownloadInput {
   type: "download";

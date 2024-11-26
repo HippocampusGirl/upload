@@ -14,7 +14,7 @@ import { _ClientSocket } from "../socket.js";
 import { CustomError } from "../utils/error.js";
 import { downloadPayloadSchema } from "../utils/payload.js";
 import { Progress } from "../utils/progress.js";
-import { reduceRanges, size, toString } from "../utils/range.js";
+import { Range, reduceRanges, size, toString } from "../utils/range.js";
 import { signal } from "../utils/signal.js";
 import { touch } from "./fs.js";
 import { clientFactory, endpointSchema } from "./socket-client.js";
@@ -250,11 +250,13 @@ class DownloadClient {
       this.checksums.add(file.checksumSHA256);
 
       // debug("verifying checksum for %s", path);
+      let range: Range | undefined =
+        file.size !== null ? { start: 0, end: file.size - 1 } : undefined;
       const checksumSHA256 = await this.workerPool.checksum({
         path,
         algorithm: "sha256",
+        range,
       });
-      this.checksums.delete(file.checksumSHA256);
       if (checksumSHA256 === file.checksumSHA256) {
         await this.controller.setVerified(file.n, file.path);
         debug("verified checksum for %s", path);
