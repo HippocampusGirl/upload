@@ -130,7 +130,8 @@ class DownloadClient {
 
   controller: Controller;
 
-  workerPool: WorkerPool;
+  checksumPool: WorkerPool;
+  downloadPool: WorkerPool;
 
   constructor(
     endpoint: string,
@@ -144,14 +145,16 @@ class DownloadClient {
     this.socket = clientFactory(endpoint, token);
     this.basePath = basePath;
     this.controller = controller;
-    this.workerPool = new WorkerPool(numThreads);
+    this.checksumPool = new WorkerPool(numThreads);
+    this.downloadPool = new WorkerPool(numThreads);
   }
 
   terminate() {
     this.controller.queue.kill();
     this.progress.terminate();
     this.socket.disconnect();
-    this.workerPool.terminate();
+    this.checksumPool.terminate();
+    this.downloadPool.terminate();
   }
 
   listen() {
@@ -252,7 +255,7 @@ class DownloadClient {
       // debug("verifying checksum for %s", path);
       let range: Range | undefined =
         file.size !== null ? { start: 0, end: file.size - 1 } : undefined;
-      const checksumSHA256 = await this.workerPool.checksum({
+      const checksumSHA256 = await this.checksumPool.checksum({
         path,
         algorithm: "sha256",
         range,
@@ -298,7 +301,7 @@ class DownloadClient {
       headers["Authorization"] = this.token;
     }
 
-    await this.workerPool.download({
+    await this.downloadPool.download({
       url,
       checksumMD5,
       headers,
