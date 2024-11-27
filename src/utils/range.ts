@@ -32,7 +32,7 @@ export const toSuffix = (range: Range, size: number): string => {
   return `${delimiter}${start}-${end}`;
 };
 
-export const parse = (path: string): Range => {
+export const parse = (path: string): [string, Range] => {
   const tokens = path.split(delimiter);
   const suffix = tokens.pop();
   if (suffix === undefined) {
@@ -47,7 +47,7 @@ export const parse = (path: string): Range => {
   if (end === undefined || Number.isNaN(end) || end < start || end < 0) {
     throw new Error(`Invalid end: ${path}`);
   }
-  return { start, end };
+  return [tokens.join(delimiter), { start, end }];
 };
 
 const byStart = (a: Range, b: Range): number => Number(a.start - b.start);

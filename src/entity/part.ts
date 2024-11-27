@@ -12,7 +12,7 @@ import { File } from "./file.js";
 import type { Relation } from "typeorm/common/RelationType.js";
 
 @Entity("parts")
-@Index(["checksumMD5"], { unique: true })
+@Index(["checksumMD5"], { unique: false })
 export class Part {
   @PrimaryColumn("bigint")
   start: number;

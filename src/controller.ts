@@ -174,11 +174,20 @@ export class Controller {
       return true;
     });
   }
-  async getPart(checksumMD5: string, range: Range): Promise<Part | null> {
+  async getPart(
+    n: string,
+    path: string,
+    range: Range,
+    checksumMD5: string
+  ): Promise<Part | null> {
     return this.submitTransaction(async (manager): Promise<Part | null> => {
+      const file = await manager.findOneBy(File, { n, path });
+      if (file === null) {
+        return null;
+      }
       const { start, end } = range;
       return manager.findOne(Part, {
-        where: { checksumMD5, start, end },
+        where: { file, start, end, checksumMD5 },
         relations: { file: true },
       });
     });

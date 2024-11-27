@@ -10,10 +10,10 @@ import { StorageProvider } from "../entity/storage-provider.js";
 import { DownloadCompleteError } from "../errors.js";
 import { _Server, _ServerSocket } from "../socket.js";
 import { BucketObject, Storage } from "../storage/base.js";
+import { parseBucketName } from "../storage/bucket-name.js";
 import type { Range } from "../utils/range.js";
 import { parse, size, toString } from "../utils/range.js";
 import { debug } from "./debug.js";
-
 const checksumMD5Schema = Joi.string().required().hex().length(32);
 
 const kConnectedEvent = Symbol("kConnectedEvent");
@@ -172,16 +172,20 @@ export class DownloadServer extends EventEmitter {
       throw new Error('"object.ETag" is undefined');
     }
 
+    let n: string;
+    try {
+      n = parseBucketName(bucket);
+    } catch (error) {
+      debug("could not parse bucket name: %O", error);
+      return null;
+    }
+
+    let path: string;
     let range: Range;
     try {
-      range = parse(key);
+      [path, range] = parse(key);
     } catch (error) {
-      debug(
-        "deleting unknown file %o because the range could not be parsed: %O",
-        key,
-        error
-      );
-      await storage.deleteFile(bucket, key);
+      debug("could not parse range for file %o: %O", key, error);
       return null;
     }
     if (size(range) !== object.Size) {
@@ -193,7 +197,7 @@ export class DownloadServer extends EventEmitter {
 
     const checksumMD5 = object.ETag.replaceAll('"', "");
     Joi.assert(checksumMD5, checksumMD5Schema);
-    const part = await controller.getPart(checksumMD5, range);
+    const part = await controller.getPart(n, path, range, checksumMD5);
     if (part === null) {
       debug(
         "deleting unknown file %o with checksum %o and range %o",

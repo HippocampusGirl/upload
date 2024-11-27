@@ -46,7 +46,7 @@ describe("controller", () => {
     const range = { start: 0, end: 10 };
     const filePart = { path, range, checksumMD5, size };
     expect(controller.addPart(n, filePart)).resolves.toBeTruthy();
-    const part = await controller.getPart(checksumMD5, range);
+    const part = await controller.getPart(n, path, range, checksumMD5);
     expect(part).not.toBeFalsy();
     expect(part).toMatchObject(range);
     expect(part!.file).toMatchObject({ path });

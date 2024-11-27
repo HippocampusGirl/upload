@@ -7,9 +7,25 @@ export const getSuffix = async (accessKeyId: string): Promise<string> => {
   return suffix;
 };
 export const getBucketName = async (
-  name: string,
+  n: string,
   accessKeyId: string
 ): Promise<string> => {
   const suffix = await getSuffix(accessKeyId);
-  return [prefix, name, suffix].join(delimiter);
+  return [prefix, n, suffix].join(delimiter);
+};
+export const parseBucketName = (bucket: string): string => {
+  if (!bucket.startsWith(prefix)) {
+    throw new Error(`Invalid bucket name: ${bucket}`);
+  }
+  const [_prefix, n, suffix] = bucket.split(delimiter);
+  if (_prefix !== prefix) {
+    throw new Error(`Invalid prefix for bucket name: "${bucket}"`);
+  }
+  if (n === undefined) {
+    throw new Error(`Missing n in bucket name: "${bucket}"`);
+  }
+  if (suffix === undefined) {
+    throw new Error(`Missing suffix in bucket name: "${bucket}"`);
+  }
+  return n;
 };
