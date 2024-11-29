@@ -175,21 +175,18 @@ export class UploadClient {
     return relativePath;
   }
 
-  async create(
-    path: string,
-    uploadRequests: UploadRequest[]
-  ): Promise<unknown> {
+  async create(path: string, uploadRequests: UploadRequest[]): Promise<void> {
     if (uploadRequests.length === 0) {
       // Nothing to do
       return;
     }
-    const results: (UploadJob | UploadCreateError)[] =
+    const responses: (UploadJob | UploadCreateError)[] =
       await this.socket.emitWithAck("upload:create", uploadRequests);
 
     const promises: Promise<unknown>[] = [];
-    for (const [index, result] of results.entries()) {
-      if ("error" in result) {
-        const { error } = result;
+    for (const [index, response] of responses.entries()) {
+      if ("error" in response) {
+        const { error } = response;
         const uploadRequest = uploadRequests[index];
         if (uploadRequest === undefined) {
           throw new Error(
@@ -202,20 +199,30 @@ export class UploadClient {
         } else {
           debug(
             'skipping upload job because "%s" for %s in range %s',
-            result.error,
+            response.error,
             uploadRequest.path,
             toString(uploadRequest.range)
           );
         }
         continue;
       }
-      this.progress.add(result);
+      this.progress.add(response);
 
-      result.path = path;
-      promises.push(this.queue.push(result));
+      response.path = path;
+      promises.push(this.queue.push(response));
     }
 
-    return Promise.all(promises);
+    // Retry failed uploads
+    const results = await Promise.allSettled(promises);
+    uploadRequests = Array.from(
+      results
+        .entries()
+        .filter(([_, result]) => result.status === "rejected")
+        .map(([index, _]) => uploadRequests[index]!)
+    );
+    if (uploadRequests.length > 0) {
+      return this.create(path, uploadRequests);
+    }
   }
   async submit(paths: string[], options: RangeOptions): Promise<unknown> {
     const jobs = paths.map(async (path): Promise<void> => {
@@ -250,7 +257,7 @@ export class UploadClient {
   async upload(job: UploadJob): Promise<CompletedUploadJob> {
     const { progress } = this;
 
-    const { url, path, range, checksumMD5 } = job;
+    const { url, path, range } = job;
 
     const headers: IncomingHttpHeaders = {
       "Content-Type": "application/octet-stream",
