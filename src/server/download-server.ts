@@ -80,10 +80,13 @@ export class DownloadServer extends EventEmitter {
 
   async loop(): Promise<void> {
     while (true) {
+      const ac = new AbortController();
+      const { signal } = ac;
       await Promise.race([
-        once(this, kConnectedEvent),
+        once(this, kConnectedEvent, { signal }),
         promisify(setTimeout)(this.interval),
       ]);
+      ac.abort();
 
       const sockets = await this.io.local.in("download").fetchSockets();
       if (sockets.length > 0) {
