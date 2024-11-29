@@ -310,6 +310,14 @@ class DownloadClient {
       size,
     });
 
+    const file = await this.controller.getFileByPath(job.n, job.path);
+    if (file === null) {
+      throw new Error(`File not found for ${job}`);
+    }
+    if (file.checksumSHA256 !== null) {
+      this.checksums.delete(file.checksumSHA256);
+    }
+
     this.progress.complete(job);
     await this.controller.setComplete(job.n, job);
 
