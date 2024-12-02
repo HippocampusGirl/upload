@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 
 import { sign } from "@tsndr/cloudflare-worker-jwt";
 
+import { algorithm } from "../utils/jwt.js";
 import { Payload, payloadSchema } from "../utils/payload.js";
 
 export const makeCreateTokenCommand = (): Command => {
@@ -58,7 +59,7 @@ export const makeCreateTokenCommand = (): Command => {
 const createToken = (value: object, privateKey: string): Promise<string> => {
   const payload = Joi.attempt(value, payloadSchema);
   const token = sign<Payload>(payload, privateKey, {
-    algorithm: "ES256",
+    algorithm,
   });
   return token;
 };

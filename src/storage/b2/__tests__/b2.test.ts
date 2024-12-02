@@ -25,7 +25,10 @@ describe("b2 api", () => {
   };
   it("can authorize account", async () => {
     const spy = jest.spyOn(undici, "request");
-    const mockRequest: typeof undici.request = async (url, options) => {
+    const mockRequest: typeof undici.request<unknown> = async (
+      url,
+      options
+    ) => {
       expect(options).toBeDefined();
       expect(url).toMatchObject(
         new URL("https://api.backblazeb2.com/b2api/v3/b2_authorize_account")
@@ -67,7 +70,10 @@ describe("b2 api", () => {
     const bucketName = "bucket";
 
     const spy = jest.spyOn(undici, "request");
-    const mockRequest: typeof undici.request = async (url, options) => {
+    const mockRequest: typeof undici.request<unknown> = async (
+      url,
+      options
+    ) => {
       expect(url).toMatchObject(new URL("b2api/v3/b2_create_bucket", apiUrl));
       expect(options).toBeDefined();
       const { method, headers, body } = options!;
@@ -111,7 +117,10 @@ describe("b2 api", () => {
     const checksumSHA1 = "candy";
 
     const spy = jest.spyOn(undici, "request");
-    const mockRequest: typeof undici.request = async (url, options) => {
+    const mockRequest: typeof undici.request<unknown> = async (
+      url,
+      options
+    ) => {
       expect(url).toMatchObject(new URL("file/bucket/file", apiUrl));
       const { method, headers } = options!;
       expect(method).toBe("HEAD");
@@ -158,7 +167,10 @@ describe("b2 api", () => {
     };
 
     const spy = jest.spyOn(undici, "request");
-    const mockRequest: typeof undici.request = async (url, options) => {
+    const mockRequest: typeof undici.request<unknown> = async (
+      url,
+      options
+    ) => {
       expect(url).toMatchObject(
         new URL("b2api/v3/b2_delete_file_version", apiUrl)
       );

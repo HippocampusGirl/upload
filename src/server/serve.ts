@@ -12,13 +12,14 @@ import msgpackParser from "socket.io-msgpack-parser";
 
 import { createAdapter, setupPrimary } from "@socket.io/cluster-adapter";
 import sticky from "@socket.io/sticky";
-import { decode, JwtData, verify } from "@tsndr/cloudflare-worker-jwt";
+import { JwtData, verify } from "@tsndr/cloudflare-worker-jwt";
 
 import { Controller } from "../controller.js";
 import { getDataSource } from "../entity/data-source.js";
 import { UnauthorizedError } from "../errors.js";
 import { _Server } from "../socket.js";
 import { Storage } from "../storage/base.js";
+import { algorithm } from "../utils/jwt.js";
 import { tsNodeArgv } from "../utils/loader.js";
 import { Payload, payloadSchema } from "../utils/payload.js";
 import { signal } from "../utils/signal.js";
@@ -223,36 +224,22 @@ class Server {
         );
       }
 
-      let decoded: JwtData | null = null;
+      let jwtData: JwtData<Payload> | undefined = undefined;
       try {
-        decoded = decode(token);
-      } catch (error) {
-        debug("error decoding token: %O", error);
-      }
-      if (
-        decoded === null ||
-        decoded.header === undefined ||
-        decoded.header.alg === undefined
-      ) {
-        return next(new UnauthorizedError("Could not decode token"));
-      }
-
-      let verified: boolean = false;
-      try {
-        verified = await verify(token, this.publicKey, {
-          algorithm: decoded.header.alg,
+        jwtData = await verify(token, this.publicKey, {
+          algorithm,
           throwError: true,
         });
       } catch (error) {
         debug("error verifying token: %O", error);
       }
-      if (verified !== true) {
+      if (jwtData === undefined) {
         return next(new UnauthorizedError("Invalid token"));
       }
 
       let payload: Payload;
       try {
-        payload = await payloadSchema.validateAsync(decoded.payload);
+        payload = await payloadSchema.validateAsync(jwtData.payload);
       } catch (error) {
         return next(new UnauthorizedError("Invalid token payload"));
       }
