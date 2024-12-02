@@ -252,7 +252,7 @@ interface Opaque {
   checksumMD5: string;
 }
 
-const factory = async (data: Dispatcher.ResponseData): Promise<void> => {
+const factory = async (data: Dispatcher.ResponseData<Opaque>): Promise<void> => {
   const { statusCode } = data;
 
   const message = `received status code ${statusCode} from server`;

@@ -5,12 +5,13 @@
 
 import { AwsClient } from "aws4fetch";
 
-import { decode, JwtData, verify } from "@tsndr/cloudflare-worker-jwt";
+import { JwtData, verify } from "@tsndr/cloudflare-worker-jwt";
 
 import { getSuffix } from "./storage/bucket-name.js";
 
 import type { ServiceWorkerGlobalScope } from "@cloudflare/workers-types";
-import type { DownloadPayload } from "./utils/payload.js";
+import { algorithm } from "./utils/jwt.js";
+import { DownloadPayload } from "./utils/payload.js";
 
 declare const self: ServiceWorkerGlobalScope;
 const { URLPattern } = self;
@@ -63,36 +64,21 @@ const authenticate = async (
     return badRequest();
   }
 
-  let decoded: JwtData | null = null;
+  let jwtData: JwtData<DownloadPayload> | undefined = undefined;
   try {
-    decoded = decode(token);
-  } catch (error) {
-    console.log("error decoding token", error);
-  }
-  if (
-    decoded === null ||
-    decoded.header === undefined ||
-    decoded.header.alg === undefined
-  ) {
-    console.log("invalid token header");
-    return unauthorized();
-  }
-
-  let verified: boolean = false;
-  try {
-    verified = await verify(token, env.jwtPublicKey, {
-      algorithm: decoded.header.alg,
+    jwtData = await verify(token, env.jwtPublicKey, {
+      algorithm,
       throwError: true,
     });
   } catch (error) {
     console.log("error verifying token", error);
   }
-  if (verified !== true) {
+  if (jwtData === undefined) {
     console.log("invalid token");
     return unauthorized();
   }
 
-  const payload = decoded.payload as DownloadPayload | undefined;
+  const payload = jwtData.payload;
   if (payload === undefined || payload.t !== "d") {
     console.log("invalid token payload");
     return unauthorized();
@@ -217,4 +203,4 @@ export default {
 
     return fetch(signedRequest);
   },
-} satisfies ExportedHandler<Env, unknown, unknown>;
+} satisfies ExportedHandler<Env>;
