@@ -9,7 +9,6 @@ import { decode, JwtData, verify } from "@tsndr/cloudflare-worker-jwt";
 
 import { getSuffix } from "./storage/bucket-name.js";
 
-import type { ServiceWorkerGlobalScope } from "@cloudflare/workers-types";
 import type { DownloadPayload } from "./utils/payload.js";
 
 declare const self: ServiceWorkerGlobalScope;
@@ -78,7 +77,7 @@ const authenticate = async (
     return unauthorized();
   }
 
-  let verified: boolean = false;
+  let verified = undefined;
   try {
     verified = await verify(token, env.jwtPublicKey, {
       algorithm: decoded.header.alg,
@@ -87,7 +86,7 @@ const authenticate = async (
   } catch (error) {
     console.log("error verifying token", error);
   }
-  if (verified !== true) {
+  if (!verified) {
     console.log("invalid token");
     return unauthorized();
   }
@@ -149,7 +148,7 @@ export default {
       return methodNotAllowed(request);
     }
 
-    let match: URLPatternURLPatternResult | null = null;
+    let match: URLPatternResult | null = null;
     try {
       match = pattern.exec(request.url);
     } catch {
@@ -217,4 +216,4 @@ export default {
 
     return fetch(signedRequest);
   },
-} satisfies ExportedHandler<Env, unknown, unknown>;
+} satisfies ExportedHandler<Env>;

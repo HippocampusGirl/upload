@@ -1,7 +1,7 @@
 import Joi from "joi";
-
 import EventEmitter, { once } from "node:events";
 import { promisify } from "node:util";
+
 import { makeKey } from "../client/upload-parts.js";
 import { ChecksumJob, DownloadFile, DownloadJob } from "../download-schema.js";
 import { File } from "../entity/file.js";
@@ -11,9 +11,10 @@ import { DownloadCompleteError } from "../errors.js";
 import { _Server, _ServerSocket } from "../socket.js";
 import { BucketObject, Storage } from "../storage/base.js";
 import { parseBucketName } from "../storage/bucket-name.js";
-import type { Range } from "../utils/range.js";
 import { parse, size, toString } from "../utils/range.js";
 import { debug } from "./debug.js";
+
+import type { Range } from "../utils/range.js";
 const checksumMD5Schema = Joi.string().required().hex().length(32);
 
 const kConnectedEvent = Symbol("kConnectedEvent");
@@ -47,11 +48,13 @@ export class DownloadServer extends EventEmitter {
         const errors = await Promise.all(jobs.map(this.complete, this));
 
         const ns = new Set(jobs.map((job) => `${job.n}/${job.path}`));
-        debug(
-          "received complete event for %d download jobs for %s",
-          jobs.length,
-          [...ns].join("|")
-        );
+        if (jobs.length > 0) {
+          debug(
+            "received complete event for %d download jobs for %s",
+            jobs.length,
+            [...ns].join("|")
+          );
+        }
 
         const count = errors.filter((error) => error !== null).length;
         if (count > 0) {
@@ -191,12 +194,6 @@ export class DownloadServer extends EventEmitter {
       debug("could not parse range for file %o: %O", key, error);
       return null;
     }
-    if (size(range) !== object.Size) {
-      throw new Error(
-        "Mismatched size between object and range in file name: " +
-          `${object.Size} != ${size(range)}`
-      );
-    }
 
     const checksumMD5 = object.ETag.replaceAll('"', "");
     Joi.assert(checksumMD5, checksumMD5Schema);
@@ -208,6 +205,16 @@ export class DownloadServer extends EventEmitter {
         checksumMD5,
         toString(range)
       );
+      await storage.deleteFile(bucket, key);
+      return null;
+    }
+    if (size(range) !== object.Size) {
+      debug(
+        "deleting file %o with mismatched size between object and range in file name: %s",
+        key,
+        `${object.Size} != ${size(range)}`
+      );
+      await controller.setComplete(n, { path, range }, false);
       await storage.deleteFile(bucket, key);
       return null;
     }
@@ -226,9 +233,6 @@ export class DownloadServer extends EventEmitter {
     this.sent.add(k);
 
     return this.createDownloadJob(storage, object, part);
-    // } catch (error) {
-    //   debug("could not parse object %o: %O", object, error);
-    // }
   }
   private async createDownloadJob(
     storage: Storage,

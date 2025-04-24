@@ -11,6 +11,7 @@ import {
   ObjectLiteral,
   QueryFailedError,
 } from "typeorm";
+
 import { File } from "./entity/file.js";
 import { Part } from "./entity/part.js";
 import { StorageProvider } from "./entity/storage-provider.js";
@@ -192,7 +193,11 @@ export class Controller {
       });
     });
   }
-  async setComplete(n: string, filePart: FilePart): Promise<File> {
+  async setComplete(
+    n: string,
+    filePart: { path: string; range: Range },
+    complete: boolean = true
+  ): Promise<File> {
     const {
       path,
       range: { start, end },
@@ -205,7 +210,7 @@ export class Controller {
       const result = await manager.update(
         Part,
         { file, start, end },
-        { complete: true }
+        { complete }
       );
       if (result.affected !== 1) {
         throw new Error(`File not found for ${n} ${path}`);

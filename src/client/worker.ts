@@ -14,9 +14,10 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { parentPort, Worker } from "node:worker_threads";
 import { Dispatcher, request } from "undici";
+
 import { InvalidResponseError, retryCodes } from "../utils/http-client.js";
 import { tsNodeArgv } from "../utils/loader.js";
-import { size, type Range } from "../utils/range.js";
+import { Range, size } from "../utils/range.js";
 import { calculateChecksum } from "./fs.js";
 
 const debug = Debug("worker");
@@ -186,7 +187,7 @@ export const worker = (): void => {
 
     await retry(async (bail: (e: Error) => void) => {
       try {
-        const data = await request(url, {
+        const data = await request<Opaque>(url, {
           method: "GET",
           headers,
           opaque,
@@ -252,7 +253,9 @@ interface Opaque {
   checksumMD5: string;
 }
 
-const factory = async (data: Dispatcher.ResponseData): Promise<void> => {
+const factory = async (
+  data: Dispatcher.ResponseData<Opaque>
+): Promise<void> => {
   const { statusCode } = data;
 
   const message = `received status code ${statusCode} from server`;

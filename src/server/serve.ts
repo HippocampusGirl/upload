@@ -44,6 +44,7 @@ export let server: Server | undefined;
 
 export const makeServeCommand = () => {
   const command = new Command(`serve`);
+  command.allowExcessArguments();
   command
     .requiredOption("--port <number>", "Port to listen on")
     .requiredOption(
@@ -192,7 +193,7 @@ class Server {
     });
 
     await Promise.all(this.workers.map((worker) => once(worker, "online")));
-    // debug("all workers are online");
+    debug("all workers are online");
   }
 
   serveWorker(): Promise<unknown> {
@@ -237,7 +238,7 @@ class Server {
         return next(new UnauthorizedError("Could not decode token"));
       }
 
-      let verified: boolean = false;
+      let verified = undefined;
       try {
         verified = await verify(token, this.publicKey, {
           algorithm: decoded.header.alg,
@@ -246,7 +247,7 @@ class Server {
       } catch (error) {
         debug("error verifying token: %O", error);
       }
-      if (verified !== true) {
+      if (!verified) {
         return next(new UnauthorizedError("Invalid token"));
       }
 

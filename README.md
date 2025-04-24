@@ -9,5 +9,5 @@ openssl ec -in private.pem -pubout -out public.pem
 ### Run locally
 
 ```bash
-
+node --import @swc-node/register/esm-register src/index.ts create-token --private-key-file private.pem --type upload --storage-id r2weur --name test
 ```
