@@ -45,7 +45,6 @@ command
 export const isMainModule = esMain(import.meta);
 if (isMainModule) {
   if (isMainThread) {
-    process.stdout.write(`parsing command line arguments ${process.argv}\n`);
     command.parse(process.argv);
   } else {
     worker();
